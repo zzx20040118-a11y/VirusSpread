@@ -1,18 +1,15 @@
-# Balance check
+# Balance result: one deliberate Spread placement per round
 
-## Run
+Command: `node balance-simulation.mjs --runs 10000 --seed 7 --spread-actions 1 --out results/one_chain_rounds.csv`
 
-10,000 simulated games on three 12-cell triangular maps, with two port links, two initial seeds, four Spread placements per round, one personal Resistance action per player plus three shared actions, one action to search/clear/block, delayed seed maturation, a half-board infection threshold, and a 20-round deadline.
+Assumptions: three 12-cell irregular triangular maps, two port links; two initial hidden seeds; each of three Resistance players gets one action plus three shared actions each round; Spread places one seed each round and may extend from public infections or any hidden seed; surviving infections generate one neighboring hidden seed after each Resistance response; hidden seeds mature after the next Resistance response; Spread wins at 18 simultaneous infections or if anything remains after round 20.
 
-## Results
+Results:
 
-| Outcome | Games | Rate |
-| --- | ---: | ---: |
-| Resistance wins | 5,654 | 56.5% |
-| Spread wins | 4,346 | 43.5% |
-| Spread wins by half-board infection | 2,667 | 61.4% of Spread wins |
-| Spread wins by deadline residue | 1,679 | 38.6% of Spread wins |
-| Mean game length | 7.18 rounds | — |
+- Resistance wins: 5,015 / 10,000 (50.15%).
+- Spread wins: 4,985 / 10,000 (49.85%).
+- Spread wins by reaching the infection threshold: 4,134 (82.93% of Spread wins).
+- Spread wins by having residue after round 20: 851 (17.07% of Spread wins).
+- Mean game length: 10.43 rounds.
 
-These estimates are close to the requested Resistance 55% / Spread 45% split and the 2:3 victory-cause split. The simulation uses heuristic strategies, not human playtest data; communication and player choices can change the results.
-
+This is close to an even split and gives Spread a deliberate route choice each round. It is a simulation estimate, not a guarantee of human play balance; the automated Resistance policy guesses randomly among local candidates.

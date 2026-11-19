@@ -10,6 +10,8 @@ assert.match(html, /spend\(1\).*清除了一个已公开感染/s, 'clearing an i
 assert.match(html, /matureAfter:state\.round\+1/, 'infection-generated seeds wait through the next response');
 assert.match(html, /matureAfter:state\.round/, 'Spread seeds can be handled in the current response');
 assert.match(html, /state\.infected\.length>=18/, 'half-board infection is a Spread victory');
-assert.match(html, /state\.guarded=\[\.\.\.\(state\.guarded\|\|\[\]\),id\]/, 'a failed search protects its cell this round');
+assert.match(html, /state\.guarded=\[\.\.\.new Set\(\[\.\.\.\(state\.guarded\|\|\[\]\),id,\.\.\.neighbors\(id\)\]\)\]/, 'a failed search protects the selected cell and its neighbors this round');
+assert.match(html, /此前已埋下的隐藏种子仍会成熟/, 'already planted seeds remain independent after their source infection is cleared');
+assert.match(html, /不会再产生新种子/, 'a cleared infection cannot plant future seeds');
 
 console.log('Prototype smoke checks passed.');

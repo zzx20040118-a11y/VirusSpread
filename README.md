@@ -1,21 +1,18 @@
 # Spread / Resistance prototype
 
-Open `index.html` in a browser to play on one device. The Resistance view only shows the active player's map. Spread sees the stitched full map.
+Open `index.html` in a browser to play on one device. Resistance only sees the active player's map; Spread sees the stitched map.
 
-## Candidate rules in this build
+## Rules in this build
 
-- Three irregular maps, 12 edge-connected triangles per map; Spread links the three maps through two pairs of ports.
-- Spread places one hidden seed each round. It may extend from a public infection or any hidden seed, so Spread chooses whether to branch or advance a route. Resistance cannot see seeds.
-- Each Resistance player gets one action per round; the team assigns three extra actions. Searching, clearing an infection, and blocking an exit each use one action.
-- A failed search protects the selected cell and its adjacent cells from new seeds for that round. This gives a player on a quiet map a proactive patrol choice rather than only blocking an exit.
-- Each infection that remains after Resistance responds creates one hidden neighboring seed. That seed stays hidden through the next Resistance response and only then matures.
-- A seed that was already planted remains after its source infection is cleared; clearing the infection stops it from planting any more seeds. The game log explains this distinction.
-- Resistance wins by clearing all seeds and infections. Spread wins at 18 simultaneous infections or if anything remains after round 20.
+- Three irregular maps of 12 edge-connected triangles each. Spread connects the maps through two pairs of ports.
+- Spread places two initial hidden seeds on separate maps. Each round it places one seed, plus one additional seed every third round. It may extend from public infections or hidden seeds.
+- At the start of Spread's turn, each public infection plants one adjacent hidden seed before Resistance responds. If that infection is cleared later in the response, its seed remains; if it was cleared before Spread's turn, it plants nothing. Seeds mature after a later Resistance response.
+- Resistance gets one action per player and three shared actions. Search, clearing an infection, and blocking a linked exit each cost one action. A missed search tells the team that the selected cell is currently clear; players can share the result to avoid repeating a search.
+- Blocking a linked exit closes it for the next Spread turn. The same linked pair then has to remain open for one round before Resistance can block it again; the cooldown applies to the whole pair, whichever endpoint was blocked.
+- Resistance wins by clearing every infection and seed. Spread wins when all 36 areas are infected or hold a hidden seed. The playable game has no round-limit victory.
 
 ## Balance simulation
 
-Run `node balance-simulation.mjs --runs 10000 --seed 7 --ap 1 --bonus-ap 3 --spread-actions 1 --auto-seeds 1 --rounds 20 --win-fraction 0.5 --out results/rounds.csv`.
+Run `node balance-simulation.mjs --runs 10000 --seed 7 --initial-seeds 2 --spread-actions 1 --extra-every 3 --win-fraction 1 --threshold-includes-seeds true --rounds 200 --out results/rounds.csv`.
 
-The 10,000-game result in `balance-results.md` is a model estimate. It uses a fixed resistance search policy; real players choosing targets differently may get different results.
-
-Run `node tests/smoke.mjs` for basic rule wiring checks.
+The simulation's round limit is only a safety cap for reporting unresolved cases; it does not award a win. Run `node tests/smoke.mjs` for basic rule wiring checks.

@@ -2,7 +2,7 @@
 
 Command: `node balance-simulation.mjs --runs 10000 --seed 7 --spread-actions 1 --out results/one_chain_rounds.csv`
 
-Assumptions: three 12-cell irregular triangular maps, two port links; two initial hidden seeds; each of three Resistance players gets one action plus three shared actions each round; Spread places one seed each round and may extend from public infections or any hidden seed; surviving infections generate one neighboring hidden seed after each Resistance response; hidden seeds mature after the next Resistance response; Spread wins at 18 simultaneous infections or if anything remains after round 20.
+Assumptions: three 12-cell irregular triangular maps, two port links; two initial hidden seeds; each of three Resistance players gets one action plus three shared actions each round; Spread places one seed each round and may extend from public infections or any hidden seed; surviving infections generate one neighboring hidden seed after each Resistance response; hidden seeds mature after the next Resistance response; a failed search protects the chosen cell and its neighbors; already planted seeds remain if their source infection is cleared, though that infection can no longer spread; Spread wins at 18 simultaneous infections or if anything remains after round 20.
 
 Results:
 
@@ -12,4 +12,4 @@ Results:
 - Spread wins by having residue after round 20: 851 (17.07% of Spread wins).
 - Mean game length: 10.43 rounds.
 
-This is close to an even split and gives Spread a deliberate route choice each round. It is a simulation estimate, not a guarantee of human play balance; the automated Resistance policy guesses randomly among local candidates.
+This is close to an even split and gives Spread a deliberate route choice each round. It includes the expanded search protection rule. It is a simulation estimate, not a guarantee of human play balance; the automated Resistance policy guesses randomly among local candidates.

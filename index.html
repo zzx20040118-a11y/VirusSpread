@@ -73,7 +73,7 @@ function neighbors(id){
 }
 function occupied(id){return state.infected.includes(id)||state.seeds.some(s=>s.id===id)}
 function infectedSources(){return [...state.infected].sort((a,b)=>a-b)}
-function legalSeedCells(){const s=new Set();for(const id of infectedSources())for(const n of neighbors(id))if(!occupied(n))s.add(n);return [...s]}
+function legalSeedCells(){const s=new Set(),sources=new Set([...infectedSources(),...state.seeds.map(seed=>seed.id)]);for(const id of sources)for(const n of neighbors(id))if(!occupied(n))s.add(n);return [...s]}
 function linkedExit(id){for(const [a,b] of state.links)if(a===id||b===id)return [a,b];return null}
 function startResistanceAllocation(){
   expireBlocks();
@@ -94,7 +94,7 @@ function dragEnd(){if(!dragging)return;dragging=null;autoConnectPorts();persist(
 function finishStitch(){if(state.links.length<2)return;if(!mapsConnected()){state.stitchNotice='还需要把三张地图都连接起来；两条连接即可。';render();return}state.phase='setup';state.stitchNotice='';log('Spread 已用两条连接把三张地图拼接成一个连通地图。');persist();render()}
 function placeInitial(){if(selected===null)return;if(state.setupSeedIds.length&&Math.floor(selected/CELLS_PER_MAP)===Math.floor(state.setupSeedIds[0]/CELLS_PER_MAP)){state.notice='第二个初始种子要放在另一张地图。';render();return}if(state.seeds.some(s=>s.id===selected)){state.notice='这个格子已有种子。';render();return}state.seeds.push({id:selected,planted:1,matureAfter:1});state.setupSeedIds.push(selected);state.notice='';selected=null;if(state.setupSeedIds.length<2){state.notice='第一个种子已放置。请在另一张地图选择第二个种子。';persist();render();return}log('Spread 在两张不同地图各放置了一个初始隐藏种子。');handoff('Resistance 团队','allocation')}
 function startSpreadRound(){
-  state.phase='spread';state.spreadLeft=4;selected=null;actionMode='';
+  state.phase='spread';state.spreadLeft=1;selected=null;actionMode='';
   if(!legalSeedCells().length){log('没有可扩散的相邻空位，本轮 Spread 不放新种子。');startResistanceAllocation();return}
   persist();render();
 }
@@ -103,7 +103,7 @@ function placeSpreadSeed(id){
   const legal=legalSeedCells();
   if(!legal.includes(id)){
     if(occupied(id))state.notice='这个格子已经有感染或种子，不能重复放置。';
-    else if(state.seeds.some(s=>neighbors(s.id).includes(id)))state.notice='这个格子只挨着未成熟种子；Spread 只能从公开感染继续扩散。';
+    else if(state.seeds.some(s=>neighbors(s.id).includes(id)))state.notice='这个格子已被占用；请选择相邻空格继续铺设感染路线。';
     else state.notice='这个位置没有与公开感染共边相邻，也没有通过已配对的出海口相连。';
     render();return;
   }
@@ -204,7 +204,7 @@ function render(){
     main.innerHTML=`<div class="eyebrow">Spread · 初始放置</div><h2>放置两个初始隐藏种子</h2><p class="intro">在两张不同地图各选一个格子放种子。Resistance 不会看到种子位置，也不知道拼接方式。</p><div class="actionrow"><span class="selection">${selected===null?'尚未选择位置':`已选择 ${cellLabel(selected)}`}</span><button class="gold" onclick="window.placeInitial()" ${selected===null?'disabled':''}>放置初始种子</button></div>${renderMaps('spread')}`;renderSide();return
   }
   if(state.phase==='spread'){
-    const legal=legalSeedCells(),notice=state.notice?`<div class="notice warn">${escapeHtml(state.notice)}</div>`:'';main.innerHTML=`<div class="eyebrow">Spread · 第 ${state.round} 轮</div><h2>选择相邻区域扩散种子</h2><p class="intro">还可以放置 <strong>${state.spreadLeft}</strong> 个隐藏种子。只要同一张地图上的三角格共边相邻，或通过配对出海口相连，就可以放置；绿色虚线格是合法位置。</p>${notice}<div class="actionrow"><button class="secondary" onclick="window.endSpread()">结束 Spread 行动</button>${legal.length?'<span class="selection">绿色虚线格均可放种子</span>':'<span class="selection">没有合法相邻空位</span>'}</div>${renderMaps('spread')}`;renderSide();return
+    const legal=legalSeedCells(),notice=state.notice?`<div class="notice warn">${escapeHtml(state.notice)}</div>`:'';main.innerHTML=`<div class="eyebrow">Spread · 第 ${state.round} 轮</div><h2>选择扩散路线</h2><p class="intro">本轮放置 1 个隐藏种子。可从公开感染或任意隐藏种子继续向相邻空格铺开，由 Spread 决定扩散方向。三角格共边或配对出海口相连才算相邻。绿色虚线格均可选择。</p>${notice}<div class="actionrow"><button class="secondary" onclick="window.endSpread()">结束 Spread 行动</button>${legal.length?'<span class="selection">点击绿色区域，自己决定扩散路线</span>':'<span class="selection">没有合法相邻空位</span>'}</div>${renderMaps('spread')}`;renderSide();return
   }
   if(state.phase==='resistance'){
     const m=state.activeMap,sel=selected,selInfected=sel!==null&&state.infected.includes(sel),selExit=sel!==null&&state.maps[m].ports.includes(sel%CELLS_PER_MAP),modeLabel=actionMode==='guess'?'猜种子':actionMode==='clear'?'清除感染':actionMode==='block'?'封锁出口':'选择行动';
@@ -239,7 +239,6 @@ load();render();
 </script>
 </body>
 </html>
-
 
 
 

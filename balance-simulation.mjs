@@ -13,7 +13,7 @@ const config = {
   apPerPlayer: Number(args.ap ?? 1), seedInfections: Number(args['initial-seeds'] ?? 2),
   bonusAp: Number(args['bonus-ap'] ?? 3),
   bonusEvery: Number(args['bonus-every'] ?? 1),
-  spreadInfectionsPerRound: Number(args['spread-actions'] ?? 4), winFraction: Number(args['win-fraction'] ?? 0.5),
+  spreadInfectionsPerRound: Number(args['spread-actions'] ?? 1), winFraction: Number(args['win-fraction'] ?? 0.5),
   autoSeedsPerInfection: Number(args['auto-seeds'] ?? 1),
   meterSteps: Number(args['meter-steps'] ?? 3),
   autoSeedMode: String(args['auto-mode'] ?? 'infection'),
@@ -114,13 +114,19 @@ function simulate(policy, random) {
       const candidates = counts.map((n,m)=>n===max?m:-1).filter(m=>m>=0);
       apByMap[candidates[Math.floor(random()*candidates.length)]]++;
     }
-    // Spread plants hidden seeds before Resistance acts. Those seeds can be searched
-    // this turn; survivors mature after this response is complete.
-    const legal = new Map();
-    for (const {node:n} of infected.values()) for (const v of adj.get(key(n)))
-      if (!infected.has(key(v)) && !seeds.has(key(v)) && !blocked.has(edgeKey(n,v))) legal.set(key(v), v);
-    const choices = shuffle([...legal.values()], random).sort((a,b)=>adj.get(key(b)).length-adj.get(key(a)).length).slice(0, config.spreadInfectionsPerRound + (args.alternate === 'true' && round % 2 === 0 ? 1 : 0));
-    for (const n of choices) seeds.set(key(n), {node:n, planted:round, matureAfter:round});
+    // Spread can continue a route from either a public infection or any hidden
+    // seed. Recalculate legal cells after every placement to allow chains.
+    const spreadCount = config.spreadInfectionsPerRound + (args.alternate === 'true' && round % 2 === 0 ? 1 : 0);
+    for (let action = 0; action < spreadCount; action++) {
+      const sources = [...infected.values(), ...seeds.values()].map(x=>x.node);
+      const legal = new Map();
+      for (const n of sources) for (const v of adj.get(key(n)))
+        if (!infected.has(key(v)) && !seeds.has(key(v)) && !blocked.has(edgeKey(n,v))) legal.set(key(v), v);
+      if (!legal.size) break;
+      const choices = shuffle([...legal.values()], random).sort((a,b)=>adj.get(key(b)).length-adj.get(key(a)).length);
+      const n = choices[0];
+      seeds.set(key(n), {node:n, planted:round, matureAfter:round});
+    }
     // A blockade lasts through one complete Spread planting turn, then opens
     // before Resistance acts in that round.
     for (const edge of [...blocked]) if ((blockedUntil.get(edge) ?? Infinity) <= round) {
@@ -285,7 +291,6 @@ for (const policy of ['combined']) {
   console.log(`${policy}: Spread wins ${wins}/${subset.length} (${(wins/subset.length*100).toFixed(1)}%); average rounds ${(subset.reduce((s,r)=>s+r.rounds_played,0)/subset.length).toFixed(2)}; average final infected ${(subset.reduce((s,r)=>s+r.final_infected,0)/subset.length).toFixed(2)}`);
 }
 console.log(`Round-by-round data: ${out}\nPer-game outcomes: ${gameOut}`);
-
 
 
 

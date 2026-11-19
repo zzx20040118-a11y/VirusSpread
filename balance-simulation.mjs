@@ -13,16 +13,17 @@ const config = {
   apPerPlayer: Number(args.ap ?? 1), seedInfections: Number(args['initial-seeds'] ?? 2),
   bonusAp: Number(args['bonus-ap'] ?? 3),
   bonusEvery: Number(args['bonus-every'] ?? 1),
-  spreadInfectionsPerRound: Number(args['spread-actions'] ?? 1), winFraction: Number(args['win-fraction'] ?? 0.5),
+  spreadInfectionsPerRound: Number(args['spread-actions'] ?? 1), winFraction: Number(args['win-fraction'] ?? 1),
   autoSeedsPerInfection: Number(args['auto-seeds'] ?? 1),
   meterSteps: Number(args['meter-steps'] ?? 3),
+  extraEvery: Number(args['extra-every'] ?? 3),
   autoSeedMode: String(args['auto-mode'] ?? 'infection'),
   guessesPerPlayer: Number(args['guesses-per-round'] ?? 99),
   allowBlocks: args['allow-blocks'] !== 'false',
-  thresholdIncludesSeeds: args['threshold-includes-seeds'] === 'true',
+  thresholdIncludesSeeds: args['threshold-includes-seeds'] !== 'false',
   allTimeCoverage: args['all-time-coverage'] === 'true',
   seedMode: String(args['seed-mode'] ?? 'random'),
-  maxRounds: Number(args.rounds ?? 20), runs: Number(args.runs ?? 5000), seed: Number(args.seed ?? 7),
+  maxRounds: Number(args.rounds ?? 200), runs: Number(args.runs ?? 5000), seed: Number(args.seed ?? 7),
 };
 
 function rngFrom(seed) {
@@ -114,88 +115,13 @@ function simulate(policy, random) {
       const candidates = counts.map((n,m)=>n===max?m:-1).filter(m=>m>=0);
       apByMap[candidates[Math.floor(random()*candidates.length)]]++;
     }
-    // Spread can continue a route from either a public infection or any hidden
-    // seed. Recalculate legal cells after every placement to allow chains.
-    const spreadCount = config.spreadInfectionsPerRound + (args.alternate === 'true' && round % 2 === 0 ? 1 : 0);
-    for (let action = 0; action < spreadCount; action++) {
-      const sources = [...infected.values(), ...seeds.values()].map(x=>x.node);
-      const legal = new Map();
-      for (const n of sources) for (const v of adj.get(key(n)))
-        if (!infected.has(key(v)) && !seeds.has(key(v)) && !blocked.has(edgeKey(n,v))) legal.set(key(v), v);
-      if (!legal.size) break;
-      const choices = shuffle([...legal.values()], random).sort((a,b)=>adj.get(key(b)).length-adj.get(key(a)).length);
-      const n = choices[0];
-      seeds.set(key(n), {node:n, planted:round, matureAfter:round});
-    }
-    // A blockade lasts through one complete Spread planting turn, then opens
-    // before Resistance acts in that round.
-    for (const edge of [...blocked]) if ((blockedUntil.get(edge) ?? Infinity) <= round) {
-      blocked.delete(edge); blockedUntil.delete(edge);
-    }
-    // Resistance responds using only its own map. Seed locations stay hidden;
-    // an AP spent on a guess clears a seed only when the guessed cell is correct.
-    const guarded = new Set();
-    for (let m = 0; m < config.maps; m++) {
-      let ap = apByMap[m];
-      const missesThisRound = new Set();
-      let guessesThisRound = 0;
-      // Keep the locations of infections seen before this turn's actions so
-      // clearing one does not erase the clue to its adjacent hidden seeds.
-      const reportedInfections = [...infected.values()].map(x=>x.node);
-      const knownSources = reportedInfections.filter(n=>n[0]===m);
-      const remoteReport = reportedInfections.some(n=>n[0]!==m);
-      while (ap > 0) {
-        const localInfected = [...infected.values()].map(x=>x.node).filter(n => n[0] === m);
-        const pressure = n => adj.get(key(n)).filter(v => !infected.has(key(v)) && !blocked.has(edgeKey(n,v))).length;
-        // Block an unused stitched exit near local infections. A visibly
-        // infected exit cannot be sealed; the selected route stays closed for
-        // the next Spread planting turn only.
-        const candidates = mapLinks[m].map(link=>{
-          const here=[m,...link.port],there=[link.neighbor,...link.remotePort],route=edgeKey(here,there);
-          const nearby=adj.get(key(here)).filter(v=>v[0]===m&&infected.has(key(v))).length;
-          return {here,there,route,nearby};
-        }).filter(c=>c.nearby>0&&!infected.has(key(c.here))&&!infected.has(key(c.there))&&!blocked.has(c.route));
-        if (config.allowBlocks && localInfected.length && ap < 1 && candidates.length) {
-          candidates.sort((a,b)=>b.nearby-a.nearby);
-          blocked.add(candidates[0].route); blockedUntil.set(candidates[0].route,round+1); blockedRound++; ap--;
-          continue;
-        }
-        // Confirmed infections have known coordinates and cost one action to clear.
-        if (localInfected.length && ap >= 1) {
-          localInfected.sort((a,b) => pressure(b)-pressure(a));
-          infected.delete(key(localInfected[0])); infectionsClearedRound++; infectionsCleared++; ap -= 1;
-          continue;
-        }
-        // Guess near known infections where possible; otherwise search the map.
-        // Misses are remembered for this round so an AP is not wasted twice on one cell.
-        if (guessesThisRound >= config.guessesPerPlayer) break;
-        const neighbours = knownSources.flatMap(n => adj.get(key(n)).filter(v => v[0] === m && !infected.has(key(v)) && !missesThisRound.has(key(v))));
-        const reportedMaps = new Set(reportedInfections.map(n=>n[0]));
-        const linkedClueExits = mapLinks[m].filter(link=>reportedMaps.has(link.neighbor))
-          .map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n)));
-        const exits = remoteReport
-          ? (linkedClueExits.length ? linkedClueExits : mapLinks[m].map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n))))
-          : [];
-        const pool = neighbours.length ? neighbours : exits.length ? exits : nodes.filter(n => n[0] === m && !infected.has(key(n)) && !missesThisRound.has(key(n)));
-        if (!pool.length) break;
-        const guess = pool[Math.floor(random()*pool.length)];
-        guessesThisRound++; guessesRound++; seedGuesses++;
-        if (seeds.has(key(guess))) { seeds.delete(key(guess)); seedsClearedRound++; seedsCleared++; }
-        else { missesThisRound.add(key(guess)); guarded.add(key(guess)); for (const adjacent of adj.get(key(guess))) guarded.add(key(adjacent)); missesRound++; seedMisses++; }
-        ap--;
-      }
-    }
-    // Seeds become public only after their scheduled Resistance response.
-    for (const [k, seed] of [...seeds]) if (seed.matureAfter <= round) {
-      seeds.delete(k); infected.set(k, {node:seed.node, at:round}); everInfected.add(k);
-    }
     // Extra spread can be checked per infection (baseline), or with one shared
     // percentile roll per round and at most one extra seed per map.
     if (config.autoSeedMode === 'once') {
       const sources = [...infected.values()].map(x=>x.node).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
       if (sources.length && random() < config.autoSeedsPerInfection) {
         for (const source of sources) {
-          const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v))&&!guarded.has(key(v)));
+          const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v)));
           if (adjacent.length) { seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round+1}); break; }
         }
       }
@@ -239,6 +165,97 @@ function simulate(policy, random) {
         }
       }
     }
+
+
+
+    // Spread can continue a route from either a public infection or any hidden
+    // seed. Recalculate legal cells after every placement to allow chains.
+    const spreadCount = config.spreadInfectionsPerRound + (config.extraEvery > 0 && round % config.extraEvery === 0 ? 1 : 0);
+    for (let action = 0; action < spreadCount; action++) {
+      const sources = [...infected.values(), ...seeds.values()].map(x=>x.node);
+      const legal = new Map();
+      for (const n of sources) for (const v of adj.get(key(n)))
+        if (!infected.has(key(v)) && !seeds.has(key(v)) && !blocked.has(edgeKey(n,v))) legal.set(key(v), v);
+      if (!legal.size) break;
+      const choices = shuffle([...legal.values()], random).sort((a,b)=>adj.get(key(b)).length-adj.get(key(a)).length);
+      const n = choices[0];
+      seeds.set(key(n), {node:n, planted:round, matureAfter:round});
+    }
+    if (!config.allTimeCoverage && config.thresholdIncludesSeeds && infected.size + seeds.size >= threshold) {
+      winner = 'Spread'; winReason = 'infection_threshold';
+      rows.push({ round, infected: infected.size, seeds: seeds.size,
+        seed_guesses_this_round: 0, seed_guesses_total: seedGuesses,
+        seed_misses_this_round: 0, seed_misses_total: seedMisses,
+        seeds_cleared_this_round: 0, seeds_cleared_total: seedsCleared,
+        infections_cleared_this_round: 0, infections_cleared_total: infectionsCleared,
+        blocked_this_round: 0, blocked_total: blocked.size,
+        resistance_ap: config.maps * config.apPerPlayer + (round % config.bonusEvery === 0 ? config.bonusAp : 0),
+        winner, win_reason: winReason });
+      break;
+    }
+    // A blockade lasts through one complete Spread planting turn, then opens
+    // before Resistance acts in that round.
+    for (const edge of [...blocked]) if ((blockedUntil.get(edge) ?? Infinity) <= round) {
+      blocked.delete(edge); blockedUntil.delete(edge);
+    }
+    // Resistance responds using only its own map. Seed locations stay hidden;
+    // an AP spent on a guess clears a seed only when the guessed cell is correct.
+    const guarded = new Set();
+    for (let m = 0; m < config.maps; m++) {
+      let ap = apByMap[m];
+      const missesThisRound = new Set();
+      let guessesThisRound = 0;
+      // Keep the locations of infections seen before this turn's actions so
+      // clearing one does not erase the clue to its adjacent hidden seeds.
+      const reportedInfections = [...infected.values()].map(x=>x.node);
+      const knownSources = reportedInfections.filter(n=>n[0]===m);
+      const remoteReport = reportedInfections.some(n=>n[0]!==m);
+      while (ap > 0) {
+        const localInfected = [...infected.values()].map(x=>x.node).filter(n => n[0] === m);
+        const pressure = n => adj.get(key(n)).filter(v => !infected.has(key(v)) && !blocked.has(edgeKey(n,v))).length;
+        // Block an unused stitched exit near local infections. A visibly
+        // infected exit cannot be sealed; the selected route stays closed for
+        // the next Spread planting turn only.
+        const candidates = mapLinks[m].map(link=>{
+          const here=[m,...link.port],there=[link.neighbor,...link.remotePort],route=edgeKey(here,there);
+          const nearby=adj.get(key(here)).filter(v=>v[0]===m&&infected.has(key(v))).length;
+          return {here,there,route,nearby};
+        }).filter(c=>c.nearby>0&&!infected.has(key(c.here))&&!infected.has(key(c.there))&&!blocked.has(c.route));
+        if (config.allowBlocks && localInfected.length && ap < 1 && candidates.length) {
+          candidates.sort((a,b)=>b.nearby-a.nearby);
+          blocked.add(candidates[0].route); blockedUntil.set(candidates[0].route,round+1); blockedRound++; ap--;
+          continue;
+        }
+        // Confirmed infections have known coordinates and cost one action to clear.
+        if (localInfected.length && ap >= Number(args['clear-infection-ap'] ?? 1)) {
+          localInfected.sort((a,b) => pressure(b)-pressure(a));
+          infected.delete(key(localInfected[0])); infectionsClearedRound++; infectionsCleared++; ap -= Number(args['clear-infection-ap'] ?? 1);
+          continue;
+        }
+        // Guess near known infections where possible; otherwise search the map.
+        // Misses are remembered for this round so an AP is not wasted twice on one cell.
+        if (guessesThisRound >= config.guessesPerPlayer) break;
+        const neighbours = knownSources.flatMap(n => adj.get(key(n)).filter(v => v[0] === m && !infected.has(key(v)) && !missesThisRound.has(key(v))));
+        const reportedMaps = new Set(reportedInfections.map(n=>n[0]));
+        const linkedClueExits = mapLinks[m].filter(link=>reportedMaps.has(link.neighbor))
+          .map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n)));
+        const exits = remoteReport
+          ? (linkedClueExits.length ? linkedClueExits : mapLinks[m].map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n))))
+          : [];
+        const pool = neighbours.length ? neighbours : exits.length ? exits : nodes.filter(n => n[0] === m && !infected.has(key(n)) && !missesThisRound.has(key(n)));
+        if (!pool.length) break;
+        const guess = pool[Math.floor(random()*pool.length)];
+        guessesThisRound++; guessesRound++; seedGuesses++;
+        if (seeds.has(key(guess))) { seeds.delete(key(guess)); seedsClearedRound++; seedsCleared++; }
+        else { missesThisRound.add(key(guess)); guarded.add(key(guess)); missesRound++; seedMisses++; }
+        ap--;
+      }
+    }
+    // Seeds mature after this response, so a newly announced infection cannot
+    // produce another seed until a later Resistance round.
+    for (const [k, seed] of [...seeds]) if (seed.matureAfter <= round) {
+      seeds.delete(k); infected.set(k, {node:seed.node, at:round}); everInfected.add(k);
+    }
     // Resolve end-of-round conditions after Resistance responds.
     if ((config.allTimeCoverage ? everInfected.size : infected.size + (config.thresholdIncludesSeeds ? seeds.size : 0)) >= threshold) { winner = 'Spread'; winReason = 'infection_threshold'; }
     else if (infected.size === 0 && seeds.size === 0) { winner = 'Resistance'; winReason = 'all_cleared'; }
@@ -252,10 +269,11 @@ function simulate(policy, random) {
     if (winner) break;
   }
   // Resistance wins only by clearing every revealed infection and hidden seed.
-  // At the round cap, any remaining infection or seed counts as Spread surviving.
+  // The simulation safety cap is not a game victory condition. Unresolved games
+  // remain visible in results instead of being incorrectly awarded to Spread.
   if (!winner) {
-    winner = infected.size === 0 && seeds.size === 0 ? 'Resistance' : 'Spread';
-    winReason = winner === 'Resistance' ? 'all_cleared' : 'survived_round_limit';
+    winner = 'Unresolved';
+    winReason = 'simulation_safety_cap';
   }
   rows.at(-1).winner = winner;
   rows.at(-1).win_reason = winReason;
@@ -284,11 +302,12 @@ const gameOut = /_rounds\.csv$/i.test(out)
   ? out.replace(/_rounds\.csv$/i, '_games.csv')
   : out.replace(/\.csv$/i, '_games.csv');
 fs.writeFileSync(gameOut, toCsv(gameRows), 'utf8');
-console.log(`Assumptions: 3 irregular maps with 12 cells each, two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seeds per round; each surviving infection creates one hidden seed after the Resistance response; ${config.maxRounds}-round cap; Spread wins at ${config.winFraction * 100}% simultaneous infections.`);
+console.log(`Assumptions: 3 irregular maps with 12 cells each, two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seed per round plus one every ${config.extraEvery} rounds; each public infection plants a hidden seed at the start of Spread's turn before Resistance responds; ${config.maxRounds}-round simulation safety cap; Spread wins when ${config.winFraction * 100}% of the board is infected or seeded.`);
 for (const policy of ['combined']) {
   const subset = gameRows.filter(row => row.policy === policy);
   const wins = subset.filter(row => row.winner === 'Spread').length;
-  console.log(`${policy}: Spread wins ${wins}/${subset.length} (${(wins/subset.length*100).toFixed(1)}%); average rounds ${(subset.reduce((s,r)=>s+r.rounds_played,0)/subset.length).toFixed(2)}; average final infected ${(subset.reduce((s,r)=>s+r.final_infected,0)/subset.length).toFixed(2)}`);
+  const unresolved = subset.filter(row => row.winner === 'Unresolved').length;
+  console.log(`${policy}: Spread wins ${wins}/${subset.length} (${(wins/subset.length*100).toFixed(1)}%); unresolved at simulation safety cap ${unresolved}; average rounds ${(subset.reduce((s,r)=>s+r.rounds_played,0)/subset.length).toFixed(2)}; average final infected ${(subset.reduce((s,r)=>s+r.final_infected,0)/subset.length).toFixed(2)}`);
 }
 console.log(`Round-by-round data: ${out}\nPer-game outcomes: ${gameOut}`);
 

@@ -1,15 +1,11 @@
-# Balance result: one deliberate Spread placement per round
+# Balance check: full infection or full cleanup
 
-Command: `node balance-simulation.mjs --runs 10000 --seed 7 --spread-actions 1 --out results/one_chain_rounds.csv`
+Simulation: 10,000 games, seed 19, two initial seeds, one deliberate Spread placement each round plus one every third round, three Resistance personal actions and three shared actions, and one hidden seed planted beside each public infection at the beginning of each Spread turn. Spread wins when all 36 spaces are infected or seeded; Resistance wins by clearing all infections and seeds. There is no round-limit victory in the playable game.
 
-Assumptions: three 12-cell irregular triangular maps, two port links; two initial hidden seeds; each of three Resistance players gets one action plus three shared actions each round; Spread places one seed each round and may extend from public infections or any hidden seed; surviving infections generate one neighboring hidden seed after each Resistance response; hidden seeds mature after the next Resistance response; a failed search protects the chosen cell and its neighbors; already planted seeds remain if their source infection is cleared, though that infection can no longer spread; Spread wins at 18 simultaneous infections or if anything remains after round 20.
+- Spread wins: 4,965 / 10,000 (49.65%).
+- Resistance wins: 5,028 / 10,000 (50.28%).
+- Unresolved at the simulator's 200-round diagnostic cap: 7 / 10,000 (0.07%). These are not awarded to either side.
+- Among resolved games: Spread 49.68%, Resistance 50.32%.
+- Average length among resolved games: 33.11 rounds.
 
-Results:
-
-- Resistance wins: 5,015 / 10,000 (50.15%).
-- Spread wins: 4,985 / 10,000 (49.85%).
-- Spread wins by reaching the infection threshold: 4,134 (82.93% of Spread wins).
-- Spread wins by having residue after round 20: 851 (17.07% of Spread wins).
-- Mean game length: 10.43 rounds.
-
-This is close to an even split and gives Spread a deliberate route choice each round. It includes the expanded search protection rule. It is a simulation estimate, not a guarantee of human play balance; the automated Resistance policy guesses randomly among local candidates.
+The game now actually runs infection-to-seed growth at the start of each Spread turn. This was missing from the previous playable build, so earlier balance figures did not reflect the displayed rule. The simulation uses automated search and clearing choices and does not model human blockade decisions; the near-even result is a useful baseline, not a guarantee of tabletop win rates. The cap only flags unusually long simulations and is not a game-ending rule.

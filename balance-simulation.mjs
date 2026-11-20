@@ -9,7 +9,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, arr
   return pairs;
 }, []));
 const config = {
-  maps: 3, cellsPerMap: Number(args['cells-per-map'] ?? 8), width: 4, height: 4,
+  maps: 3, cellsPerMap: Number(args['cells-per-map'] ?? 8), portsPerMap: Number(args['ports-per-map'] ?? 5), width: 4, height: 4,
   apPerPlayer: Number(args.ap ?? 1), seedInfections: Number(args['initial-seeds'] ?? 2),
   bonusAp: Number(args['bonus-ap'] ?? 4),
   bonusEvery: Number(args['bonus-every'] ?? 1),
@@ -50,7 +50,8 @@ function graph(random) {
   const nodes = [], adj = new Map();
   const maps = shuffle(tileTypes, random).slice(0, config.maps).map(tile => {
     const coords = tile.coords.slice(0, config.cellsPerMap);
-    const ports = coords.map((_, i) => i);
+    const portCount = Math.max(2, Math.min(coords.length, config.portsPerMap));
+    const ports = Array.from({length: portCount}, (_, i) => Math.floor(i * coords.length / portCount));
     return { ...tile, coords, ports };
   });
   const names = maps.map(t=>t.name);
@@ -306,7 +307,7 @@ const gameOut = /_rounds\.csv$/i.test(out)
   ? out.replace(/_rounds\.csv$/i, '_games.csv')
   : out.replace(/\.csv$/i, '_games.csv');
 fs.writeFileSync(gameOut, toCsv(gameRows), 'utf8');
-console.log(`Assumptions: 3 irregular maps with ${config.cellsPerMap} cells each, two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seed per round plus one every ${config.extraEvery} rounds; each public infection plants a hidden seed at the start of Spread's turn before Resistance responds; ${config.maxRounds}-round simulation safety cap; Spread wins when ${config.winFraction * 100}% of the board is infected or seeded.`);
+console.log(`Assumptions: 3 irregular maps with ${config.cellsPerMap} cells each and ${config.portsPerMap} candidate outlets per map, joined by two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seed per round plus one every ${config.extraEvery} rounds; each public infection plants a hidden seed at the start of Spread's turn before Resistance responds; ${config.maxRounds}-round simulation safety cap; Spread wins when ${config.winFraction * 100}% of the board is infected or seeded.`);
 for (const policy of ['combined']) {
   const subset = gameRows.filter(row => row.policy === policy);
   const wins = subset.filter(row => row.winner === 'Spread').length;
@@ -314,6 +315,7 @@ for (const policy of ['combined']) {
   console.log(`${policy}: Spread wins ${wins}/${subset.length} (${(wins/subset.length*100).toFixed(1)}%); unresolved at simulation safety cap ${unresolved}; average rounds ${(subset.reduce((s,r)=>s+r.rounds_played,0)/subset.length).toFixed(2)}; average final infected ${(subset.reduce((s,r)=>s+r.final_infected,0)/subset.length).toFixed(2)}`);
 }
 console.log(`Round-by-round data: ${out}\nPer-game outcomes: ${gameOut}`);
+
 
 
 

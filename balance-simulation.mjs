@@ -22,7 +22,7 @@ const config = {
   allowBlocks: args['allow-blocks'] !== 'false',
   thresholdIncludesSeeds: args['threshold-includes-seeds'] !== 'false',
   allTimeCoverage: args['all-time-coverage'] === 'true',
-  seedMode: String(args['seed-mode'] ?? 'random'),
+  seedMode: String(args['seed-mode'] ?? 'spread'),
   maxRounds: Number(args.rounds ?? 200), runs: Number(args.runs ?? 5000), seed: Number(args.seed ?? 7),
 };
 
@@ -46,12 +46,24 @@ const tileTypes = [
  {name:'tri_delta',coords:[[0,0,0],[1,-1,0],[1,0,-1],[1,0,0],[0,1,0],[0,0,1],[0,-1,0],[1,-1,1],[0,-1,1],[1,-1,-1],[0,0,-1],[1,1,0]],ports:[0,6,11]},
  {name:'tri_bay',coords:[[0,0,0],[1,-1,0],[0,-1,1],[0,-1,0],[1,-1,1],[0,0,1],[1,0,1],[1,-2,0],[0,-2,1],[1,-2,1],[1,0,0],[0,0,2]],ports:[0,7,11]},
 ];
+function coastalPorts(coords, requested = 5) {
+  const tiles = new Set(coords.map(cell => cell.join(',')));
+  const coast = [];
+  coords.forEach(([orientation, row, col], index) => {
+    const adjacent = orientation === 0
+      ? [[1,row,col], [1,row,col-1], [1,row-1,col]]
+      : [[0,row,col], [0,row+1,col], [0,row,col+1]];
+    if (adjacent.some(cell => !tiles.has(cell.join(',')))) coast.push(index);
+  });
+  const count = Math.min(requested, coast.length);
+  return Array.from({length: count}, (_, i) => coast[Math.floor(i * coast.length / count)]);
+}
 function graph(random) {
   const nodes = [], adj = new Map();
   const maps = shuffle(tileTypes, random).slice(0, config.maps).map(tile => {
     const coords = tile.coords.slice(0, config.cellsPerMap);
     const portCount = Math.max(2, Math.min(coords.length, config.portsPerMap));
-    const ports = Array.from({length: portCount}, (_, i) => Math.floor(i * coords.length / portCount));
+    const ports = coastalPorts(coords, portCount);
     return { ...tile, coords, ports };
   });
   const names = maps.map(t=>t.name);
@@ -217,7 +229,7 @@ function simulate(policy, random) {
       const remoteReport = reportedInfections.some(n=>n[0]!==m);
       while (ap > 0) {
         const localInfected = [...infected.values()].map(x=>x.node).filter(n => n[0] === m);
-        const pressure = n => adj.get(key(n)).filter(v => !infected.has(key(v)) && !blocked.has(edgeKey(n,v))).length;
+        const pressure = n => adj.get(key(n)).filter(v => v[0] === m && !infected.has(key(v)) && !blocked.has(edgeKey(n,v))).length;
         // Block an unused stitched exit near local infections. A visibly
         // infected exit cannot be sealed; the selected route stays closed for
         // the next Spread planting turn only.
@@ -241,12 +253,8 @@ function simulate(policy, random) {
         // Misses are remembered for this round so an AP is not wasted twice on one cell.
         if (guessesThisRound >= config.guessesPerPlayer) break;
         const neighbours = knownSources.flatMap(n => adj.get(key(n)).filter(v => v[0] === m && !infected.has(key(v)) && !missesThisRound.has(key(v))));
-        const reportedMaps = new Set(reportedInfections.map(n=>n[0]));
-        const linkedClueExits = mapLinks[m].filter(link=>reportedMaps.has(link.neighbor))
-          .map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n)));
-        const exits = remoteReport
-          ? (linkedClueExits.length ? linkedClueExits : mapLinks[m].map(link=>[m,...link.port]).filter(n=>!infected.has(key(n))&&!missesThisRound.has(key(n))))
-          : [];
+        const exits = remoteReport ? mapPorts[m].map(port => [m,port])
+          .filter(n => !infected.has(key(n)) && !missesThisRound.has(key(n))) : [];
         const pool = neighbours.length ? neighbours : exits.length ? exits : nodes.filter(n => n[0] === m && !infected.has(key(n)) && !missesThisRound.has(key(n)));
         if (!pool.length) break;
         const guess = pool[Math.floor(random()*pool.length)];
@@ -315,19 +323,3 @@ for (const policy of ['combined']) {
   console.log(`${policy}: Spread wins ${wins}/${subset.length} (${(wins/subset.length*100).toFixed(1)}%); unresolved at simulation safety cap ${unresolved}; average rounds ${(subset.reduce((s,r)=>s+r.rounds_played,0)/subset.length).toFixed(2)}; average final infected ${(subset.reduce((s,r)=>s+r.final_infected,0)/subset.length).toFixed(2)}`);
 }
 console.log(`Round-by-round data: ${out}\nPer-game outcomes: ${gameOut}`);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -50,8 +50,7 @@ function graph(random) {
   const nodes = [], adj = new Map();
   const maps = shuffle(tileTypes, random).slice(0, config.maps).map(tile => {
     const coords = tile.coords.slice(0, config.cellsPerMap);
-    const ports = tile.ports.filter(port => port < config.cellsPerMap);
-    for (let i = 0; ports.length < 3 && i < coords.length; i++) if (!ports.includes(i)) ports.push(i);
+    const ports = coords.map((_, i) => i);
     return { ...tile, coords, ports };
   });
   const names = maps.map(t=>t.name);

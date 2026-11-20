@@ -9,7 +9,7 @@ assert.match(html, /state\.sharedPool=4/, 'the team gets four shared actions');
 assert.match(html, /function availableAP\(m=state\.activeMap\)\{return \(state\.ap\[m\]\|\|0\)\+\(state\.sharedPool\|\|0\)\}/, 'players can use shared actions during their turn without allocating them first');
 assert.match(html, /state\.spreadLeft=1\+\(state\.round%3===0\?1:0\)/, 'Spread gets an extra deliberate placement every third round');
 assert.match(html, /availableAP\(\)<2\)return;state\.infected=state\.infected\.filter\(x=>x!==selected\);spend\(2\)/, 'clearing an infection costs two actions');
-assert.match(html, /matureAfter:state\.round\+1/, 'infection-generated seeds wait through the next response');
+assert.doesNotMatch(html, /matureAfter:state\.round\+1/, 'automatic seeds must not get an extra hidden round');
 assert.match(html, /matureAfter:state\.round/, 'Spread seeds can be handled in the current response');
 assert.match(html, /function fullCoverage\(\)\{return state\.infected\.length\+state\.seeds\.length>=CELLS_PER_MAP\*3\}/, 'Spread wins when infection or seeds cover the full board');
 assert.doesNotMatch(html, /state\.round>=20/, 'the game has no round-limit victory');

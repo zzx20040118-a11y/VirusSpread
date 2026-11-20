@@ -139,7 +139,7 @@ function simulate(policy, random) {
       if (sources.length && random() < config.autoSeedsPerInfection) {
         for (const source of sources) {
           const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v)));
-          if (adjacent.length) { seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round+1}); break; }
+          if (adjacent.length) { seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round}); break; }
         }
       }
     } else if (config.autoSeedMode === 'round-roll') {
@@ -148,7 +148,7 @@ function simulate(policy, random) {
       const extraCount = Math.floor((3 * sources.length + rollOffset) / 5);
       for (const source of sources.slice(0, extraCount)) {
         const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v)));
-        if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round+1});
+        if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round});
       }
     } else if (config.autoSeedMode === 'meter') {
       const sources = [...infected.values()].map(x=>x.node).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
@@ -158,7 +158,7 @@ function simulate(policy, random) {
       contagionMeter = total % 5;
       for (const source of sources.slice(0, extraCount)) {
         const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v))).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
-        for (const cell of adjacent.slice(0, surge ? 2 : 1)) seeds.set(key(cell), {node:cell, sourceId:key(source), planted:round, matureAfter:round+1});
+        for (const cell of adjacent.slice(0, surge ? 2 : 1)) seeds.set(key(cell), {node:cell, sourceId:key(source), planted:round, matureAfter:round});
       }
     } else if (config.autoSeedMode === 'map') {
       const mapGroups = Array.from({length:config.maps}, (_,m) => [...infected.values()].map(x=>x.node).filter(n=>n[0]===m));
@@ -170,7 +170,7 @@ function simulate(policy, random) {
         if (roll > threshold) continue;
         const source = sources[Math.floor(random()*sources.length)];
         const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v))).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
-        if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round+1});
+        if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round});
       }
     } else {
       for (const {node:source} of infected.values()) {
@@ -178,7 +178,7 @@ function simulate(policy, random) {
         if (random() < config.autoSeedsPerInfection - autoCount) autoCount++;
         for (let j=0;j<autoCount;j++) {
           const adjacent = adj.get(key(source)).filter(v=>!infected.has(key(v))&&!seeds.has(key(v))&&!blocked.has(edgeKey(source,v))).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
-          if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round+1});
+          if (adjacent.length) seeds.set(key(adjacent[0]), {node:adjacent[0], sourceId:key(source), planted:round, matureAfter:round});
         }
       }
     }

@@ -2,6 +2,10 @@
 
 Open `index.html` in a browser to play on one device. Resistance only sees the active player's map; Spread sees the stitched map.
 
+## AI players
+
+Before starting, use the player selectors above the game to set any of the four seats to human or AI. AI seats act automatically after a short pause. The Spread bot chooses the stitched exits and seed routes; Resistance bots search locally using visible infection clues, remember clear searches, and clear public infections. Resistance bots do not inspect hidden seeds to choose a search. This is a local heuristic bot, so no API key or network connection is needed. You can also set every seat to AI to watch a full game.
+
 ## Rules in this build
 
 - Three irregular maps of eight edge-connected triangles each (24 areas total). Five numbered triangles per map are marked as outlet candidates; Spread drags the maps to make two outlet pairs, and Resistance cannot see which cells were connected.

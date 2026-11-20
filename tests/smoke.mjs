@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(html, /const CELLS_PER_MAP=8/, 'each map has eight spaces for a shorter search');
-assert.match(html, /ports:coords\.map\(\(_,i\)=>i\)/, 'every triangle can be selected as an outlet');
+assert.match(html, /portCount=5,ports=Array\.from\(\{length:portCount\},\(_,i\)=>Math\.floor\(i\*coords\.length\/portCount\)\)/, 'five triangles per map are selected as outlet candidates');
 assert.match(html, /stitch\?map\.ports\.includes\(i\):!!linkedExit\(id\)/, 'only Spread sees the actual stitched outlet cells after setup');
 assert.match(html, /state\.ap=\[1,1,1\]/, 'each Resistance player gets one action');
 assert.match(html, /state\.sharedPool=4/, 'the team gets four shared actions');
@@ -23,3 +23,4 @@ assert.match(html, /已经埋下的种子仍会成熟/, 'already planted seeds r
 assert.match(html, /不会再产生新种子/, 'a cleared infection cannot plant future seeds');
 
 console.log('Prototype smoke checks passed.');
+

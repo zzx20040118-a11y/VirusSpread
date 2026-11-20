@@ -11,7 +11,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, arr
 const config = {
   maps: 3, width: 4, height: 4,
   apPerPlayer: Number(args.ap ?? 1), seedInfections: Number(args['initial-seeds'] ?? 2),
-  bonusAp: Number(args['bonus-ap'] ?? 3),
+  bonusAp: Number(args['bonus-ap'] ?? 5),
   bonusEvery: Number(args['bonus-every'] ?? 1),
   spreadInfectionsPerRound: Number(args['spread-actions'] ?? 1), winFraction: Number(args['win-fraction'] ?? 1),
   autoSeedsPerInfection: Number(args['auto-seeds'] ?? 1),
@@ -227,9 +227,9 @@ function simulate(policy, random) {
           continue;
         }
         // Confirmed infections have known coordinates and cost one action to clear.
-        if (localInfected.length && ap >= Number(args['clear-infection-ap'] ?? 1)) {
+        if (localInfected.length && ap >= Number(args['clear-infection-ap'] ?? 2)) {
           localInfected.sort((a,b) => pressure(b)-pressure(a));
-          infected.delete(key(localInfected[0])); infectionsClearedRound++; infectionsCleared++; ap -= Number(args['clear-infection-ap'] ?? 1);
+          infected.delete(key(localInfected[0])); infectionsClearedRound++; infectionsCleared++; ap -= Number(args['clear-infection-ap'] ?? 2);
           continue;
         }
         // Guess near known infections where possible; otherwise search the map.

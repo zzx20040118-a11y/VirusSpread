@@ -57,7 +57,7 @@ function shuffled(a){return [...a].sort(()=>Math.random()-.5)}
 function mapId(m,i){return m*CELLS_PER_MAP+i}
 function edge(a,b){return [a,b].sort((x,y)=>x-y).join(':')}
 function log(msg){state.log.unshift(`第${state.round}轮 · ${msg}`);state.log=state.log.slice(0,35)}
-function compactLayout(tile){const coords=tile.coords.slice(0,CELLS_PER_MAP),ports=tile.ports.filter(i=>i<CELLS_PER_MAP);for(let i=0;ports.length<3&&i<CELLS_PER_MAP;i++)if(!ports.includes(i))ports.push(i);return {...tile,coords,ports}}
+function compactLayout(tile){const coords=tile.coords.slice(0,CELLS_PER_MAP);return {...tile,coords,ports:coords.map((_,i)=>i)}}
 function makeGame(){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
   state={round:1,phase:'stitch',nextPhase:'',nextRole:'',maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
@@ -148,10 +148,10 @@ function mapCard(m,viewer){
   const map=state.maps[m],isSpread=viewer==='spread',cells=[],stitch=state.phase==='stitch',boardMap=isSpread&&['stitch','setup','spread','finished'].includes(state.phase),pos=state.positions[m];
   const minR=Math.min(...map.coords.map(c=>c[1])),minQ=Math.min(...map.coords.map(c=>c[2]));
   for(let i=0;i<CELLS_PER_MAP;i++){
-    const id=mapId(m,i),status=statusOf(id,viewer),isExit=map.ports.includes(i),isSelected=selected===id,[orient,row,col]=map.coords[i];
+    const id=mapId(m,i),status=statusOf(id,viewer),isExit=isSpread?(stitch?map.ports.includes(i):!!linkedExit(id)):false,isSelected=selected===id,[orient,row,col]=map.coords[i];
     const legal=isSpread&&state.phase==='spread'&&legalSeedCells().includes(id);
     const canClick=(state.phase==='setup'&&isSpread)||(state.phase==='spread'&&isSpread)||(state.phase==='resistance'&&m===state.activeMap);
-    let icon='',tiny='';if(status==='infected'){icon='✹';tiny='已公开感染'}else if(status==='seed'){icon='●';tiny='隐藏种子'}else if(isExit){icon='⚓';tiny='出口'}else{icon='';tiny=''}
+    let icon='',tiny='';if(status==='infected'){icon='✹';tiny='已公开感染'}else if(status==='seed'){icon='●';tiny='隐藏种子'}else if(isExit){icon='⚓';tiny=stitch?'可连接':'出口'}else{icon='';tiny=''}
     let routeInfo='';if(isSpread){const id2=linkedExit(id);if(id2)routeInfo=` ↔ ${labels[Math.floor((id2[0]===id?id2[1]:id2[0])/CELLS_PER_MAP)]}`}
     const cls=['cell','triangle-cell',orient===0?'tri-down':'tri-up',status,isSelected?'selected':'',legal?'legal':''].filter(Boolean).join(' ');
     const route=linkedExit(id),remoteId=route?(route[0]===id?route[1]:route[0]):null,routeName=route?labels[Math.floor(remoteId/CELLS_PER_MAP)].replace('地图 ',''):'';
@@ -159,7 +159,7 @@ function mapCard(m,viewer){
     const remotePortNum=route?state.maps[Math.floor(remoteId/CELLS_PER_MAP)].ports.indexOf(remoteId%CELLS_PER_MAP)+1:0;
     cells.push(`<button class="${cls}" data-cell-id="${id}" style="left:${(col-minQ)*56+(row-minR)*28+(orient===1?28:0)}px;top:${(row-minR)*48.5}px" ${canClick?'':'disabled'} onclick="window.gameCell(${id})" title="${labels[m]} ${i+1}${routeInfo}"><span class="num">${i+1}</span><span class="token">${icon}</span><span class="tiny">${tiny}</span>${isExit?`<span class="port">${isSpread&&route?`P${portNum}↔${routeName}-P${remotePortNum}`:`P${portNum}`}</span>`:''}</button>`)
   }
-  const extra=state.phase==='stitch'&&isSpread?`<div class="map-foot">8 个三角区域，每格编号 1–8；P1–P3 是出海口。任意连接其他地图的未用出口。</div>`:isSpread?`<div class="map-foot">三角格共边即可扩散；绿色虚线格可以放置种子。出海口配对对 Resistance 隐藏。</div>`:`<div class="map-foot">你只看到自己的地图。格子编号 1–8；隐藏种子和出海口配对不会显示。</div>`;
+  const extra=state.phase==='stitch'&&isSpread?`<div class="map-foot">8 个三角区域，每格编号 1–8；每格都可作为出海口候选。拖动地图让任意格子靠近，自动连接两组。</div>`:isSpread?`<div class="map-foot">三角格共边即可扩散；绿色虚线格可以放置种子。实际连接的两对出海口对 Resistance 隐藏。</div>`:`<div class="map-foot">你只看到自己的地图。格子编号 1–8；Spread 可选任意格连接出海口，实际配对不会显示。</div>`;
   const controls=stitch?`<span class="stitch-help">⠿ 拖动地图块</span>`:'';
   const positionStyle=boardMap?`style="left:${pos.x}px;top:${pos.y}px"`:'';
   return `<section class="map-card ${stitch?'stitch-piece':boardMap?'assembled-piece':''}" data-map="${m}" ${positionStyle}><div class="map-head" ${stitch?`onpointerdown="window.dragStart(event,${m})"`:''}><div><h3>${labels[m]}</h3><small>${map.name} · 8 个三角区域</small></div><span class="map-tag">${isSpread?'Spread 可见':m===state.activeMap?'你的地图':'地图隐藏'}</span>${controls}</div><div class="grid irregular-grid">${cells.join('')}</div>${extra}</section>`

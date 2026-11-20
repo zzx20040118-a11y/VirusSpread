@@ -1,4 +1,4 @@
-# Coastal ports
+# Historical coastal-port results (before the seed timing fix)
 
 10,000 games, seed 424242, 100-round diagnostic cap. The simulation uses the five coastal candidates on each map. Two initial seeds start on different maps. Resistance can search candidate ports after a teammate reports infections, and cannot use the secret link endpoints to rank cells. Spread won 8,293 games and Resistance won 1,707, averaging 15.10 rounds. This measures the simulator's policies, which differ from the in-game bots and human players. Both the geography and the simulation policy changed since the historical run below.
 

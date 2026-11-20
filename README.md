@@ -1,10 +1,10 @@
 # Spread / Resistance prototype
 
-Open `index.html` in a browser to play on one device. Resistance only sees the active player's map; Spread sees the stitched map.
+Open `index.html` in a browser to play on one device. Resistance only sees the active player's map; Spread sees the stitched map. At setup, click two port cells on different maps to make a link; repeat with two unused ports to connect all three maps.
 
 ## AI players
 
-Before starting, use the player selectors above the game to set any of the four seats to human or AI. AI seats act automatically after a short pause. The Spread bot chooses the stitched exits and seed routes; Resistance bots search locally using visible infection clues, remember clear searches, and clear public infections. Resistance bots do not inspect hidden seeds to choose a search. This is a local heuristic bot, so no API key or network connection is needed. You can also set every seat to AI to watch a full game.
+Use the player selectors at the top of the screen to set any of the four seats to human or AI. The selectors stay visible with a saved game and can be changed at any time. AI seats act automatically after a short pause. The Spread bot chooses the stitched exits and seed routes; Resistance bots search locally using visible infection clues, remember clear searches, and clear public infections. Resistance bots do not inspect hidden seeds to choose a search. This is a local heuristic bot, so no API key or network connection is needed. You can also set every seat to AI to watch a full game.
 
 ## Rules in this build
 

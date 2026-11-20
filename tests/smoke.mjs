@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(html, /state\.ap=\[1,1,1\]/, 'each Resistance player gets one action');
-assert.match(html, /state\.sharedPool=3/, 'the team gets three optional actions');
+assert.match(html, /state\.sharedPool=5/, 'the team gets five shared actions');
 assert.match(html, /state\.spreadLeft=1\+\(state\.round%3===0\?1:0\)/, 'Spread gets an extra deliberate placement every third round');
-assert.match(html, /spend\(1\).*清除了一个已公开感染/s, 'clearing an infection costs one action');
+assert.match(html, /state\.ap\[state\.activeMap\]<2\)return;state\.infected=state\.infected\.filter\(x=>x!==selected\);spend\(2\)/, 'clearing an infection costs two actions');
 assert.match(html, /matureAfter:state\.round\+1/, 'infection-generated seeds wait through the next response');
 assert.match(html, /matureAfter:state\.round/, 'Spread seeds can be handled in the current response');
 assert.match(html, /function fullCoverage\(\)\{return state\.infected\.length\+state\.seeds\.length>=CELLS_PER_MAP\*3\}/, 'Spread wins when infection or seeds cover the full board');

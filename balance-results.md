@@ -1,11 +1,11 @@
-# Faster full-infection/full-cleanup balance check
+# Compact-map balance check
 
-10,000 automated games, seed 25071. Rules tested: two starting seeds; Spread places one seed each round plus a second on every third round; each public infection plants one adjacent hidden seed at the start of Spread's turn; Resistance gets one personal action each and five shared actions; search/block costs one action and clearing a public infection costs two. Wins still require full coverage or clearing every infection and seed. No round-limit win was used.
+10,000 automated games, seed 30147. Rules tested: three connected maps of eight triangles each (24 spaces total); two initial seeds on separate maps; Spread places one seed each round and a second every third round; each public infection plants one adjacent hidden seed at the start of Spread's turn; Resistance gets one personal action each and four shared actions; searching costs one action and clearing a public infection costs two. The shared pool is used during Resistance turns, with the automated policy prioritizing the map with the most visible infections. There is no blockade action or separate allocation screen. Wins still require full coverage or complete cleanup.
 
-- Spread wins: 5,417 (54.17%).
-- Resistance wins: 4,579 (45.79%).
-- Still unresolved at the simulator's 100-round diagnostic cap: 4 (0.04%); these are not awarded to either side.
-- Among resolved games: Spread 54.19%, Resistance 45.81%.
-- Length: 17.11 rounds on average; median 17; 90% finished by round 30 and 95% by round 36. The longest resolved sample took 99 rounds.
+- Spread wins: 4,630 (46.30%).
+- Resistance wins: 5,358 (53.58%).
+- Unresolved at the simulator's 100-round diagnostic cap: 12 (0.12%); these are not counted as wins.
+- Among resolved games: Spread 46.36%, Resistance 53.64%.
+- Length: 16.22 rounds on average; median 14; 90% finished by round 31 and 95% by round 39.
 
-This is shorter than the prior tested rules (33.11 rounds on average; 90% finished by round 63). The result is near the target 55/45 balance and keeps the full-board/full-cleanup endings. It does not guarantee a 20-minute maximum: the simulation does not model real player discussion time or blockade choices, and a small number of games lasted much longer. The online game has no timer or round-limit victory.
+This version reduces the board from 36 to 24 spaces, removes the repeated-blockade action and removes the pre-round shared-action allocation step. The 8-cell layouts are connected. The result is close to a 55/45 Resistance-favored balance and shorter in the average case; actual minutes still depend on discussion and decision speed, which the simulator does not model. The playable game still has no timer or round-limit victory.

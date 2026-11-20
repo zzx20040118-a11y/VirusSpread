@@ -126,7 +126,7 @@ function makeGame(ai=aiSetup){
   selected=null;actionMode='';persist();render();
 }
 function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV13',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV13')}catch(e){}}
-function load(){try{const x=localStorage.getItem('spreadResistanceSaveV13');if(x){state=JSON.parse(x);upgradeCoasts();state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
+function load(){try{const x=localStorage.getItem('spreadResistanceSaveV13');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
 function neighbors(id){
   const m=Math.floor(id/CELLS_PER_MAP),i=id%CELLS_PER_MAP,[o,r,q]=state.maps[m].coords[i],out=[];
   const local=o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]];
@@ -140,7 +140,7 @@ function infectedSources(){return [...state.infected].sort((a,b)=>a-b)}
 function legalSeedCells(){const s=new Set(),sources=new Set([...infectedSources(),...state.seeds.map(seed=>seed.id)]);for(const id of sources)for(const n of neighbors(id))if(!occupied(n))s.add(n);return [...s]}
 function linkedExit(id){for(const [a,b] of state.links)if(a===id||b===id)return [a,b];return null}
 function addSeed(seed){state.seeds.push(seed)}
-function spreadPublicInfections(){let made=0;for(const source of infectedSources()){const dests=neighbors(source).filter(n=>!occupied(n)).sort((a,b)=>a-b).slice(0,1);for(const dest of dests){addSeed({id:dest,sourceId:source,planted:state.round,matureAfter:state.round+1});made++}}if(made)log(`Spread 行动开始前，公开感染埋下了 ${made} 个隐藏种子；本轮可搜索清除。`)}
+function spreadPublicInfections(){let made=0;for(const source of infectedSources()){const dests=neighbors(source).filter(n=>!occupied(n)).sort((a,b)=>a-b).slice(0,1);for(const dest of dests){addSeed({id:dest,sourceId:source,planted:state.round,matureAfter:state.round});made++}}if(made)log(`Spread 行动开始前，公开感染埋下了 ${made} 个隐藏种子；本轮可搜索清除。`)}
 function beginResistanceRound(){
   state.aiEmpty=[];state.sharedPool=4;state.ap=[1,1,1];state.activeMap=0;selected=null;actionMode='';
   log('Resistance 每人有 1 次基本行动；团队另有 4 次共享行动，可在行动阶段直接使用。');
@@ -193,11 +193,24 @@ function spend(n){const personal=Math.min(state.ap[state.activeMap]||0,n);state.
 function guess(){if(selected===null||availableAP()<1)return;const id=selected,idx=state.seeds.findIndex(s=>s.id===id);spend(1);if(idx>=0){state.seeds.splice(idx,1);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，找到并清除了隐藏种子。`);state.notice='找到了！种子已清除。'}else{state.aiEmpty??=[];if(!state.aiEmpty.includes(id))state.aiEmpty.push(id);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，当前没有隐藏种子；可把结果告诉队友，避免重复搜索。`);state.notice='当前没有找到种子，可把结果告诉队友。'}selected=null;actionMode='';persist();render()}
 function clearInfection(){if(selected===null||!state.infected.includes(selected)||availableAP()<2)return;state.infected=state.infected.filter(x=>x!==selected);spend(2);log(`${labels[state.activeMap]} 花费 2 次行动清除了一个已公开感染。此前已经埋下的种子仍会成熟；清除后该感染不会再产生新种子。`);selected=null;actionMode='';persist();render()}
 function finishMap(){const m=state.activeMap;if(m<2){handoff(owners[m+1],`resistance-${m+1}`)}else finishResistanceRound()}
+function revealSeedsThrough(round) {
+  const remaining = [];
+  let revealed = 0;
+  for (const seed of state.seeds) {
+    if (seed.planted > round) {
+      remaining.push(seed);
+    } else if (!state.infected.includes(seed.id)) {
+      state.infected.push(seed.id);
+      revealed++;
+    }
+  }
+  state.seeds = remaining;
+  return revealed;
+}
 function finishResistanceRound(){
   // Growth has already happened before this response. Seeds now mature only after Resistance acts.
-  const mature=state.seeds.filter(s=>(s.matureAfter??s.planted)<=state.round);state.seeds=state.seeds.filter(s=>(s.matureAfter??s.planted)>state.round);
-  for(const s of mature)if(!state.infected.includes(s.id))state.infected.push(s.id);
-  if(mature.length)log(`Resistance 行动结束：${mature.length} 个上轮未清除的种子成熟并公开；它们不会在本轮立即传播。`);
+  const revealed = revealSeedsThrough(state.round);
+  if (revealed) log(`本轮行动结束，${revealed} 个未清除的种子已公开为感染。`);
   if(state.infected.length===0&&state.seeds.length===0){endGame('Resistance','全部种子与感染已清除');return}
   if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
   state.round++;beginNextRound();
@@ -281,7 +294,7 @@ function render(){
     $('#side').textContent = '';
     return;
   }
-    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro">这是一个可玩的规则原型：三张轮廓各异的三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；公开感染在每轮 Spread 阶段开始时先埋下隐藏种子，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>在两张不同地图各放 1 个初始种子；每轮放 1 个种子，每第 3 轮额外放 1 个。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 4 次共享行动，不需要预先分配。搜索种子用 1 次行动，清除公开感染用 2 次。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，每个公开感染先埋下 1 个相邻隐藏种子，随后 Resistance 才能搜索或清除。种子会保持隐藏，直到 Resistance 完成下一轮行动后才成熟。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Resistance 清空全部种子与感染获胜；Spread 让全部 24 格都被感染或埋下种子时获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮 1 次行动，团队另有 4 次共享行动，可在 Resistance 行动阶段使用；搜索用 1 次，清除感染用 2 次。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
+    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro">这是一个可玩的规则原型：三张轮廓各异的三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；公开感染在每轮 Spread 阶段开始时先埋下隐藏种子，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>在两张不同地图各放 1 个初始种子；每轮放 1 个种子，每第 3 轮额外放 1 个。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 4 次共享行动，不需要预先分配。搜索种子用 1 次行动，清除公开感染用 2 次。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，每个公开感染先埋下 1 个相邻隐藏种子，随后 Resistance 才能搜索或清除。本轮三位 Resistance 都行动完毕后，所有剩余种子公开为感染。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Resistance 清空全部种子与感染获胜；Spread 让全部 24 格都被感染或埋下种子时获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮 1 次行动，团队另有 4 次共享行动，可在 Resistance 行动阶段使用；搜索用 1 次，清除感染用 2 次。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
   if(state.phase==='finished'){
     const spread=state.winner==='Spread';main.innerHTML=`<div class="winner ${spread?'spread':''}"><div class="emoji">${spread?'🦠':'🛡️'}</div><div class="eyebrow">游戏结束</div><h2>${spread?'Spread 获胜':'Resistance 获胜'}</h2><p>${escapeHtml(state.winReason)}。第 ${state.round} 轮结束，共有 ${state.infected.length} 个公开感染和 ${state.seeds.length} 个隐藏种子。</p><button onclick="window.newGame()">再开一局</button></div><div class="actionrow"><button class="secondary" onclick="window.toggleFinalBoard()">查看 Spread 全图</button></div><div id="finalBoard"></div>`;renderSide();return
   }
@@ -331,7 +344,7 @@ const lessons = [
   ['连接港口','锚形标记只会出现在有外露边的三角格上。点 A 图一个港口，再点 B 图一个港口。用剩下的港口把 C 图也连进来，再点「完成拼接」。'],
   ['埋下种子','开局在两张不同地图各放一颗种子。之后每次 Spread 行动，先由公开感染向相邻空格自动播种，再由你沿共边或已连接的港口放 1 颗。每第 3 轮可放 2 颗。'],
   ['搜查自己的地图','叶形是隐藏种子，只有 Spread 看得见。星芒是公开感染。Resistance 选一个格子，花 1 点搜索种子，或花 2 点清除公开感染。每人有 1 点个人行动，另有团队共用的 4 点。'],
-  ['沟通与胜负','可以在语音中报出地图字母、格号和搜索结果，交流免费。手动种子在本轮 Resistance 行动结束时成熟，自动种子在下一轮行动结束时成熟。24 格全部有种子或感染时 Spread 胜，全部清空时 Resistance 胜。']
+  ['沟通与胜负','可以在语音中报出地图字母、格号和搜索结果，交流免费。本轮三位 Resistance 都行动完毕后，手动和自动种子一起结算，未清除的全部公开为感染。24 格全部有种子或感染时 Spread 胜，全部清空时 Resistance 胜。']
 ];
 let lesson = 0;
 function showLesson() {

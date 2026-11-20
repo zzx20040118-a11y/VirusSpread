@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(html, /const CELLS_PER_MAP=8/, 'each map has eight spaces for a shorter search');
+assert.match(html, /ports:coords\.map\(\(_,i\)=>i\)/, 'every triangle can be selected as an outlet');
+assert.match(html, /stitch\?map\.ports\.includes\(i\):!!linkedExit\(id\)/, 'only Spread sees the actual stitched outlet cells after setup');
 assert.match(html, /state\.ap=\[1,1,1\]/, 'each Resistance player gets one action');
 assert.match(html, /state\.sharedPool=4/, 'the team gets four shared actions');
 assert.match(html, /function availableAP\(m=state\.activeMap\)\{return \(state\.ap\[m\]\|\|0\)\+\(state\.sharedPool\|\|0\)\}/, 'players can use shared actions during their turn without allocating them first');

@@ -9,9 +9,9 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, arr
   return pairs;
 }, []));
 const config = {
-  maps: 3, width: 4, height: 4,
+  maps: 3, cellsPerMap: Number(args['cells-per-map'] ?? 8), width: 4, height: 4,
   apPerPlayer: Number(args.ap ?? 1), seedInfections: Number(args['initial-seeds'] ?? 2),
-  bonusAp: Number(args['bonus-ap'] ?? 5),
+  bonusAp: Number(args['bonus-ap'] ?? 4),
   bonusEvery: Number(args['bonus-every'] ?? 1),
   spreadInfectionsPerRound: Number(args['spread-actions'] ?? 1), winFraction: Number(args['win-fraction'] ?? 1),
   autoSeedsPerInfection: Number(args['auto-seeds'] ?? 1),
@@ -48,7 +48,12 @@ const tileTypes = [
 ];
 function graph(random) {
   const nodes = [], adj = new Map();
-  const maps = shuffle(tileTypes, random).slice(0, config.maps);
+  const maps = shuffle(tileTypes, random).slice(0, config.maps).map(tile => {
+    const coords = tile.coords.slice(0, config.cellsPerMap);
+    const ports = tile.ports.filter(port => port < config.cellsPerMap);
+    for (let i = 0; ports.length < 3 && i < coords.length; i++) if (!ports.includes(i)) ports.push(i);
+    return { ...tile, coords, ports };
+  });
   const names = maps.map(t=>t.name);
   const mapPorts = [], mapLinks = Array.from({length:config.maps},()=>[]);
   for (let m=0;m<config.maps;m++) {
@@ -247,7 +252,7 @@ function simulate(policy, random) {
         const guess = pool[Math.floor(random()*pool.length)];
         guessesThisRound++; guessesRound++; seedGuesses++;
         if (seeds.has(key(guess))) { seeds.delete(key(guess)); seedsClearedRound++; seedsCleared++; }
-        else { missesThisRound.add(key(guess)); guarded.add(key(guess)); missesRound++; seedMisses++; }
+        else { missesThisRound.add(key(guess)); missesRound++; seedMisses++; }
         ap--;
       }
     }
@@ -302,7 +307,7 @@ const gameOut = /_rounds\.csv$/i.test(out)
   ? out.replace(/_rounds\.csv$/i, '_games.csv')
   : out.replace(/\.csv$/i, '_games.csv');
 fs.writeFileSync(gameOut, toCsv(gameRows), 'utf8');
-console.log(`Assumptions: 3 irregular maps with 12 cells each, two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seed per round plus one every ${config.extraEvery} rounds; each public infection plants a hidden seed at the start of Spread's turn before Resistance responds; ${config.maxRounds}-round simulation safety cap; Spread wins when ${config.winFraction * 100}% of the board is infected or seeded.`);
+console.log(`Assumptions: 3 irregular maps with ${config.cellsPerMap} cells each, two port links; ${config.apPerPlayer} personal action plus ${config.bonusAp} team actions per round; ${config.seedInfections} initial seeds; ${config.spreadInfectionsPerRound} Spread seed per round plus one every ${config.extraEvery} rounds; each public infection plants a hidden seed at the start of Spread's turn before Resistance responds; ${config.maxRounds}-round simulation safety cap; Spread wins when ${config.winFraction * 100}% of the board is infected or seeded.`);
 for (const policy of ['combined']) {
   const subset = gameRows.filter(row => row.policy === policy);
   const wins = subset.filter(row => row.winner === 'Spread').length;

@@ -12,17 +12,21 @@ Use the player selectors at the top of the screen to set any of the four seats t
 
 ## Rules in this build
 
-- Three irregular maps of eight edge-connected triangles each (24 areas total). Five numbered triangles per map are marked as outlet candidates; all five have an exposed edge and are visible locally. Spread clicks ports to make two outlet pairs, and Resistance cannot see which cells were connected.
-- Spread places two initial hidden seeds on separate maps. Each round it places one seed, plus one additional seed every third round. It may extend from public infections or hidden seeds.
-- At the start of Spread's turn, each public infection plants one adjacent hidden seed before Resistance responds. If that infection is cleared later in the response, its seed remains; if it was cleared before Spread's turn, it plants nothing. All surviving seeds become public infections at the end of the Resistance response in their planting round.
-- Resistance gets one basic action per player and four shared actions for the team. The shared pool is spent during Resistance turns, so it no longer needs a separate allocation step. Searching for a seed costs one action; clearing a public infection costs two. A missed search tells the team that the selected cell is currently clear.
-- The blockade action has been removed to prevent repeated port blocking from stalling play. Spread still uses the stitched links, and Resistance still shares search findings freely.
-- Resistance wins by clearing every infection and seed. Spread wins when all 24 areas are infected or hold a hidden seed. The playable game has no round-limit victory.
+Balance branch `balance/shared5-extra3-ports4`: shared Resistance pool 3 → 5, Spread +1 seed every third round, outlet candidates 5 → 4 per map.
+
+- Three irregular maps of eight edge-connected triangles each (24 areas total). Four numbered coastal triangles per map are marked as outlet candidates. Spread clicks ports to make two outlet pairs, and Resistance cannot see which cells were connected.
+- Spread places two initial hidden seeds on any two different cells. Each round it places one seed, plus one more on rounds 3, 6, 9 and so on. It may extend from public infections or hidden seeds.
+- At the start of Spread's turn, Spread picks one adjacent cell for each public infection and plants a hidden seed there before Resistance responds. All surviving seeds become public infections at the end of the Resistance response in their planting round.
+- Resistance gets one personal action per player and five shared actions for the team. Searching for a seed costs one action; clearing a public infection costs two and gives that player +1 personal action next round.
+- Resistance wins by clearing every infection and seed. Spread wins when all 24 areas are infected or hold a hidden seed. There is no round-limit victory.
 
 ## Balance simulation
+
+`python3 balance_sim.py '[["baseline",{}]]'` runs 3,000 bot games per setting under the current rules (no Node needed). Pass any of `maps`, `ports`, `links` (chain/ring/double), `spread`, `extra_every`, `auto`, `shared`, `clear`, `clear_bonus` to override the defaults. The older `balance-simulation.mjs` still models earlier rules.
+
 
 Run `node balance-simulation.mjs --runs 10000 --seed 30147 --cells-per-map 8 --ports-per-map 5 --initial-seeds 2 --ap 1 --bonus-ap 4 --clear-infection-ap 2 --auto-seeds 1 --spread-actions 1 --extra-every 3 --win-fraction 1 --threshold-includes-seeds true --rounds 100 --out results/rounds.csv`.
 
 Historical balance check before restricting outlets to the coast: 50,000 automated games over five seeds gave Resistance 54.4% and Spread 45.6%. The simulation selects two legal links randomly; a human Spread player can choose links strategically, so this estimate may not match table play exactly. See `balance-results.md`.
 
-The simulation's round limit is only a safety cap for reporting unresolved cases; it does not award a win. Run `node tests/smoke.mjs` for basic rule wiring checks.Preview deployment test
+The simulation's round limit is only a safety cap for reporting unresolved cases; it does not award a win. Run `node tests/smoke.mjs` for basic rule wiring checks.

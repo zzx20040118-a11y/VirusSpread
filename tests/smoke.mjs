@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(html, /const CELLS_PER_MAP=8/, 'each map has eight spaces for a shorter search');
-assert.match(html, /state\.ap=\[1,1,1\]/, 'each Resistance player gets one action');
-assert.match(html, /state\.sharedPool=4/, 'the team gets four shared actions');
+assert.match(html, /state\.ap=state\.nextApBonus\.map\(n=>1\+n\)/, 'each Resistance player gets one action plus any clear bonus');
+assert.match(html, /state\.sharedPool=5/, 'the team gets five shared actions');
 assert.match(html, /function availableAP\(m=state\.activeMap\)\{return \(state\.ap\[m\]\|\|0\)\+\(state\.sharedPool\|\|0\)\}/, 'players can use shared actions during their turn without allocating them first');
 assert.match(html, /state\.spreadLeft=1\+\(state\.round%3===0\?1:0\)/, 'Spread gets an extra deliberate placement every third round');
 assert.match(html, /availableAP\(\)<2\)return;state\.infected=state\.infected\.filter\(x=>x!==selected\);spend\(2\)/, 'clearing an infection costs two actions');
@@ -26,7 +26,7 @@ const layouts = Function('return ' + html.match(/const layoutPool=(\[[\s\S]*?\])
 for (const layout of layouts) {
   const coords = layout.coords.slice(0,8);
   const ports = selectPorts(coords);
-  assert.equal(new Set(ports).size,5);
+  assert.equal(new Set(ports).size,4);
   for(const i of ports) {
     const [o,r,c] = coords[i];
     const neighbors = coords.filter(([a,b,d]) => a!==o && ((b===r && d===c) ||

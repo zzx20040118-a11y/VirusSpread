@@ -25,4 +25,4 @@ Run `node balance-simulation.mjs --runs 10000 --seed 30147 --cells-per-map 8 --p
 
 Historical balance check before restricting outlets to the coast: 50,000 automated games over five seeds gave Resistance 54.4% and Spread 45.6%. The simulation selects two legal links randomly; a human Spread player can choose links strategically, so this estimate may not match table play exactly. See `balance-results.md`.
 
-The simulation's round limit is only a safety cap for reporting unresolved cases; it does not award a win. Run `node tests/smoke.mjs` for basic rule wiring checks.
+The simulation's round limit is only a safety cap for reporting unresolved cases; it does not award a win. Run `node tests/smoke.mjs` for basic rule wiring checks.Preview deployment test

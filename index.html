@@ -109,7 +109,7 @@ function buildMapLibrary(){
   const signatures=new Set();
   return mapNames.map((name,i)=>{
     let best=null,bestSignature='',bestScore=-Infinity;
-    for(let trial=0;trial<450;trial++){
+    for(let trial=0;trial<900;trial++){
       const coords=createTile(i*1000+trial+1);
       if(!coords)continue;
       const minR=Math.min(...coords.map(c=>c[1])),minQ=Math.min(...coords.map(c=>c[2]));

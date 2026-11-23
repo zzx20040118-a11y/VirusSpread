@@ -47,12 +47,16 @@
 dialog{width:min(480px,94vw);color:var(--ink);box-shadow:var(--shadow)}dialog::backdrop{background:#18323980}
 #voiceMount iframe{width:100%;height:370px;border:0;border-radius:10px}.tools-panel input{width:min(100%,540px);padding:9px}
 @media(max-width:720px){.topbar{flex-wrap:wrap}.stitch-board{min-width:0;grid-template-columns:1fr}.stitch-board .map-card{max-width:300px}.layout{display:block}.side{margin-top:12px}}
+
+.map-card{background:color-mix(in srgb,var(--map-color,#fffefa) 28%,white);border-top:4px solid var(--map-color,#d9dfd9)}
+.triangle-cell{background:var(--map-color,#e3e9df)!important}
+.triangle-cell.harbor{background:var(--map-coast,#a4d4ce)!important}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="brandmark">◉</div><div><h1>Spread / Resistance</h1><small>三张不规则三角地图 · 贴边相邻 · 隐蔽种子</small></div></div>
+    <div class="brand"><div class="brandmark">◉</div><div><h1>Spread / Resistance</h1><small>15 种彩色三角地图 · 随机开局 · 自主扩散</small></div></div>
     <div class="top-actions"><button class="secondary small" id="guideBtn">玩法教程</button><button class="secondary small" id="voiceBtn" aria-expanded="false" aria-controls="voicePanel">语音房间</button><button class="secondary small" id="newGameBtn">新开一局</button></div>
   </header>
   <section id="voicePanel" class="tools-panel" hidden>
@@ -76,12 +80,42 @@ dialog{width:min(480px,94vw);color:var(--ink);box-shadow:var(--shadow)}dialog::b
 (()=>{
 const $=s=>document.querySelector(s), labels=['地图 A','地图 B','地图 C'], owners=['Resistance 1','Resistance 2','Resistance 3'];
 const CELLS_PER_MAP=8;
-const layoutPool=[
-  {name:'北湾三角洲',coords:[[0,0,0],[1,0,0],[0,0,1],[0,1,0],[1,1,0],[1,-1,1],[0,1,1],[1,1,-1],[1,0,-1],[0,1,-1],[1,1,1],[1,0,1]],ports:[0,4,11]},
-  {name:'东岬群岛',coords:[[0,0,0],[1,0,0],[0,1,0],[1,0,-1],[0,1,-1],[1,1,-2],[1,1,-1],[0,2,-2],[1,2,-2],[0,2,-1],[1,2,-3],[0,3,-3]],ports:[0,5,11]},
-  {name:'三角洲群',coords:[[0,0,0],[1,-1,0],[1,0,-1],[1,0,0],[0,1,0],[0,0,1],[0,-1,0],[1,-1,1],[0,-1,1],[1,-1,-1],[0,0,-1],[1,1,0]],ports:[0,6,11]},
-  {name:'长湾三角洲',coords:[[0,0,0],[1,-1,0],[0,-1,1],[0,-1,0],[1,-1,1],[0,0,1],[1,0,1],[1,-2,0],[0,-2,1],[1,-2,1],[1,0,0],[0,0,2]],ports:[0,7,11]}
-];
+const mapNames=['北湾三角洲','东岬群岛','长风海角','翡翠滩','月影湾','赤岩海岸','银沙群岛','霜叶半岛','紫藤岬','琥珀群礁','苍蓝港','珊瑚滩','暮光湾','青岚群岛','金雀海角'];
+const mapColors=['#d8e8cc','#dfd7f2','#f5dfc2','#cbe7e4','#ead6e8','#f2d6c9','#d5e3f3','#e0e8d3','#e9d7ed','#f3e6be','#c8dfe8','#f5ddda','#d4d5ee','#cee4d8','#eee2c9'];
+function triangleAdjacencies([o,r,q]){return o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]]}
+function createTile(seed){
+  let n=seed*7919+113;
+  const random=()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296};
+  const coords=[[0,0,0]];
+  while(coords.length<CELLS_PER_MAP){
+    const occupied=new Set(coords.map(c=>c.join(',')));
+    const options=[...new Map(coords.flatMap(triangleAdjacencies).filter(c=>!occupied.has(c.join(','))).map(c=>[c.join(','),c])).values()];
+    const legal=options.filter(candidate=>{
+      const all=[...coords,candidate],minR=Math.min(...all.map(c=>c[1])),maxR=Math.max(...all.map(c=>c[1])),minQ=Math.min(...all.map(c=>c[2]));
+      const width=Math.max(...all.map(([o,r,q])=>(q-minQ)*56+(r-minR)*28+(o===1?28:0)+56));
+      return width<=300&&(maxR-minR+1)*48.5<=205;
+    });
+    if(!legal.length)return null;
+    coords.push(legal[Math.floor(random()*legal.length)]);
+  }
+  return coords;
+}
+function buildMapLibrary(){
+  const signatures=new Set();
+  return mapNames.map((name,i)=>{
+    for(let trial=0;trial<100;trial++){
+      const coords=createTile(i*100+trial+1);
+      if(!coords)continue;
+      const minR=Math.min(...coords.map(c=>c[1])),minQ=Math.min(...coords.map(c=>c[2]));
+      const signature=coords.map(([o,r,q])=>[o,r-minR,q-minQ].join(',')).sort().join(';');
+      if(signatures.has(signature))continue;
+      signatures.add(signature);
+      return {name,coords,color:mapColors[i],coast:'#a8d7ce'};
+    }
+    throw new Error('无法生成足够数量的连通地图');
+  });
+}
+const layoutPool=buildMapLibrary();
 let state=null, selected=null, actionMode='', dragging=null, aiSetup={spread:false,resistance:[false,false,false]},aiTimer=null;
 function rand(n){return Math.floor(Math.random()*n)}
 function shuffled(a){return [...a].sort(()=>Math.random()-.5)}
@@ -122,11 +156,11 @@ function upgradeCoasts() {
 }
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
-  state={coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
+  state={coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
-function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV13',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV13')}catch(e){}}
-function load(){try{const x=localStorage.getItem('spreadResistanceSaveV13');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
+function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV14',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV14')}catch(e){}}
+function load(){try{const x=localStorage.getItem('spreadResistanceSaveV14');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
 function neighbors(id){
   const m=Math.floor(id/CELLS_PER_MAP),i=id%CELLS_PER_MAP,[o,r,q]=state.maps[m].coords[i],out=[];
   const local=o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]];
@@ -265,7 +299,7 @@ function mapCard(m,viewer){
   }
   const extra=state.phase==='stitch'&&isSpread?`<div class="map-foot">8 个三角区域，每格编号 1–8；带⚓的是出海口。点击两个不同地图上的港口，完成一条连接。</div>`:isSpread?`<div class="map-foot">三角格共边即可扩散；绿色虚线格可以放置种子。实际连接的两对出海口对 Resistance 隐藏。</div>`:`<div class="map-foot">你只看到自己的地图。格子编号 1–8；Spread 从 5 个出海口候选中选择连接位置，本图出海口为 ${map.ports.map(i=>i+1).join("、")} 号。</div>`;
   const controls=stitch?`<span class="stitch-help">点击 ⚓ 选择连接</span>`:'';
-  const positionStyle=boardMap?`style="left:${pos.x}px;top:${pos.y}px"`:'';
+  const positionStyle=`style="--map-color:${map.color};--map-coast:${map.coast};${boardMap?`left:${pos.x}px;top:${pos.y}px;`:''}"`;
   return `<section class="map-card ${stitch?'stitch-piece':boardMap?'assembled-piece':''}" data-map="${m}" ${positionStyle}><div class="map-head"><div><h3>${labels[m]}</h3><small>${map.name} · 8 个三角区域</small></div><span class="map-tag">${isSpread?'Spread 可见':m===state.activeMap?'你的地图':'地图隐藏'}</span>${controls}</div><div class="grid irregular-grid">${cells.join('')}</div>${extra}</section>`
 }
 function renderMaps(viewer){if(viewer==='resistance'){return `<div class="maps resistance-map">${mapCard(state.activeMap,viewer)}</div>`}const cards=[0,1,2].map(m=>mapCard(m,viewer)).join('');if(['stitch','setup','spread','finished'].includes(state.phase))return `<div class="stitch-scroll"><div class="stitch-board"><svg class="stitch-lines" aria-hidden="true"></svg>${cards}</div></div>`;return `<div class="maps">${cards}</div>`}

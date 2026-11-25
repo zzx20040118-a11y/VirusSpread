@@ -119,15 +119,15 @@ const CELLS_PER_MAP=8;
 const MAX_ROUNDS=10;
 const TERRAIN={plains:{name:'平原',icon:'🌿'},desert:{name:'沙漠',icon:'☀'},snow:{name:'雪地',icon:'❄'}};
 const EVENTS={
- overgrowth:{name:'植被疯长',terrain:'plains',side:'Spread',effect:'平原感染额外扩散最多 3 次；平原搜索 +1 AP'},
- rain:{name:'暴雨',terrain:'plains',side:'Resistance',effect:'平原感染不能扩散；本轮首次平原清除免费'},
- sinkhole:{name:'地面塌陷',terrain:'plains',side:'Mixed',effect:'平原出海口关闭；平原无法搜索隐藏种子'},
- sandstorm:{name:'沙尘暴',terrain:'desert',side:'Spread',effect:'沙漠感染额外扩散最多 3 次；沙漠无法搜索种子'},
- drought:{name:'极端干旱',terrain:'desert',side:'Resistance',effect:'沙漠感染不能扩散或接收新种子；免费清除最多 2 个沙漠感染'},
- heatwave:{name:'热浪',terrain:'desert',side:'Spread',effect:'沙漠成熟感染额外扩散最多 2 次；清除沙漠感染 +1 AP'},
- blizzard:{name:'暴风雪',terrain:'snow',side:'Resistance',effect:'雪地感染不能扩散；雪地清除感染仅需 1 AP'},
- thaw:{name:'融雪',terrain:'snow',side:'Spread',effect:'雪地成熟感染额外扩散最多 2 次，雪地搜索额外消耗 1 AP'},
- freeze:{name:'冰封',terrain:'snow',side:'Mixed',effect:'雪地出海口关闭；雪地搜索 +1 AP，清除感染仅需 1 AP'}
+ overgrowth:{name:'植被疯长',terrain:'plains',side:'Spread',effect:'每个已感染平原额外扩散 1 次；每个未公开感染的平原搜索 +1 AP'},
+ rain:{name:'暴雨',terrain:'plains',side:'Resistance',effect:'每个已感染平原不能作为扩散源；每个未公开感染的平原免费搜索 1 次'},
+ sinkhole:{name:'地面塌陷',terrain:'plains',side:'Mixed',effect:'每个已感染平原出海口禁止跨岛传播；每个未公开感染的平原免疫新种子'},
+ sandstorm:{name:'沙尘暴',terrain:'desert',side:'Spread',effect:'每个已感染沙漠额外扩散 1 次；每个未公开感染的沙漠无法搜索'},
+ drought:{name:'极端干旱',terrain:'desert',side:'Resistance',effect:'每个已感染沙漠不能作为扩散源；每个未公开感染的沙漠免疫新种子'},
+ heatwave:{name:'热浪',terrain:'desert',side:'Spread',effect:'每个已感染沙漠额外扩散 1 次；每个未公开感染的沙漠搜索 +1 AP'},
+ blizzard:{name:'暴风雪',terrain:'snow',side:'Resistance',effect:'每个已感染雪地不能作为扩散源；每个未公开感染的雪地免费搜索 1 次'},
+ thaw:{name:'融雪',terrain:'snow',side:'Spread',effect:'每个已感染雪地额外扩散 1 次；每个未公开感染的雪地搜索 +1 AP'},
+ freeze:{name:'冰封',terrain:'snow',side:'Mixed',effect:'每个已感染雪地出海口禁止跨岛传播；每个未公开感染的雪地免疫新种子'}
 };
 const CALENDARS=[
  {name:'A · 早期爆发',events:{2:'overgrowth',4:'sandstorm',7:'blizzard'}},

@@ -154,27 +154,27 @@ const EVENTS={
 const TERRAIN_EFFECTS={
  plains:{
   spread:{
-   positive:{name:'藤蔓蔓延',description:'每个平原公开感染格沿不走回头路的路径播下最多 3 颗种子',kind:'path',quota:3},
+   positive:{name:'藤蔓蔓延',description:'每个平原公开感染格沿不走回头路的路径播下最多 5 颗种子',kind:'path',quota:5},
    negative:{name:'土壤封锁',description:'每个平原公开感染格及其邻格本轮禁止播种',kind:'sowlock',rounds:1}},
   resistance:{
    positive:{name:'净土行动',description:'每个非公开感染平原格清除自己或邻格的一处公开感染',kind:'cleanOne'},
-   negative:{name:'浓雾遮蔽',description:'每个非公开感染平原格及其邻格本轮不能搜索种子',kind:'searchlock',rounds:1}}
+   negative:{name:'浓雾遮蔽',description:'每个非公开感染平原格及其邻格连续两轮不能搜索种子',kind:'searchlock',rounds:2}}
  },
  desert:{
   spread:{
    positive:{name:'沙暴播种',description:'每个沙漠公开感染格向自身相邻空格播下最多 3 颗种子',kind:'fan',quota:3},
-   negative:{name:'流沙封地',description:'每个沙漠公开感染格及其邻格禁止播种两轮',kind:'sowlock',rounds:2}},
+   negative:{name:'流沙封地',description:'每个沙漠公开感染格及其邻格禁止播种一轮',kind:'sowlock',rounds:1}},
   resistance:{
    positive:{name:'沙墙防线',description:'每个非公开感染沙漠格及其邻格本轮不能接收新种子',kind:'sowlock',rounds:1},
-   negative:{name:'沙尘遮眼',description:'每个非公开感染沙漠格及其邻格本轮不能搜索种子',kind:'searchlock',rounds:1}}
+   negative:{name:'沙尘遮眼',description:'每个非公开感染沙漠格及其邻格连续两轮不能搜索种子',kind:'searchlock',rounds:2}}
  },
  snow:{
   spread:{
-   positive:{name:'雪崩蔓延',description:'每个雪地公开感染格沿不回头的路径播下最多 3 颗种子',kind:'path',quota:3},
+   positive:{name:'雪崩蔓延',description:'每个雪地公开感染格沿不回头的路径播下最多 5 颗种子',kind:'path',quota:5},
    negative:{name:'病毒冻结',description:'每个雪地公开感染格无法扩散，感染港口本轮封闭',kind:'sourcelock',rounds:1}},
   resistance:{
-   positive:{name:'冰川防护',description:'每个非公开感染雪地格和邻格两轮不能接收种子',kind:'sowlock',rounds:2},
-   negative:{name:'救援受阻',description:'每个非公开感染雪地格周围公开感染本轮不能清除',kind:'clearlock',rounds:1}}
+   positive:{name:'冰川防护',description:'每个非公开感染雪地格和邻格一轮不能接收种子',kind:'sowlock',rounds:1},
+   negative:{name:'救援受阻',description:'每个非公开感染雪地格周围公开感染连续两轮不能清除',kind:'clearlock',rounds:2}}
  }
 };
 const CALENDARS=[

@@ -135,36 +135,50 @@ const CALENDARS=[
  {name:'C · 后期决战',events:{3:'sinkhole',6:'heatwave',8:'freeze'}},
  {name:'D · 连续冲击',events:{2:'blizzard',5:'sandstorm',6:'overgrowth',8:'drought'}}
 ];
+
 function terrainOf(id){return state.maps[Math.floor(id/CELLS_PER_MAP)].terrain[id%CELLS_PER_MAP]}
 function eventId(){return state.eventId||''}
 function activeEvent(){return EVENTS[eventId()]||null}
 function terrainMatch(id,t){return terrainOf(id)===t}
-function blockedHarbor(id){const e=activeEvent();return e&&(eventId()==='sinkhole'||eventId()==='freeze')&&linkedExit(id)&&terrainMatch(id,e.terrain)}
+function eventSide(id,side){return (state.eventOwnership?.[side]||[]).includes(id)}
+function blockedHarbor(id){return ['sinkhole','freeze'].includes(eventId())&&eventSide(id,'spread')&&!!linkedExit(id)}
+function protectedTerrainTarget(id){return ['sinkhole','drought','freeze'].includes(eventId())&&eventSide(id,'resistance')}
 function spreadNeighbors(id){
- const e=activeEvent();
- return neighbors(id).filter(n=>!(linkedExit(id)&&linkedExit(id).includes(n)&&(blockedHarbor(id)||blockedHarbor(n)))&&!(eventId()==='drought'&&terrainMatch(n,'desert')));
+ return neighbors(id).filter(n=>!protectedTerrainTarget(n)&&!(linkedExit(id)?.includes(n)&&(blockedHarbor(id)||blockedHarbor(n))));
 }
-function canSourceSpread(id){const e=activeEvent();return !(e&&['rain','drought','blizzard'].includes(eventId())&&terrainMatch(id,e.terrain))}
-function eventBonusLimit(){return ({overgrowth:3,sandstorm:3,heatwave:2,thaw:2})[eventId()]||0}
-function eventBonusSource(id){const e=activeEvent();return e&&['overgrowth','sandstorm','heatwave','thaw'].includes(eventId())&&terrainMatch(id,e.terrain)}
+function canSourceSpread(id){return !(eventSide(id,'spread')&&['rain','drought','blizzard'].includes(eventId()))}
+function eventBonusLimit(){return ['overgrowth','sandstorm','heatwave','thaw'].includes(eventId())?(state.eventOwnership?.spread.length||0):0}
+function eventBonusSource(id){return eventBonusLimit()>0&&eventSide(id,'spread')}
 function runCalendarEvent(){
  state.eventId=state.calendar.events[state.round]||'';
+ state.eventOwnership={spread:[],resistance:[]};
+ state.eventUsedResistance=[];
  state.eventFreeUsed=0;
  if(!state.eventId)return;
  const e=activeEvent();
- log('日历事件：'+e.name+'（'+e.effect+'）');
+ for(let id=0;id<CELLS_PER_MAP*3;id++){
+   if(!terrainMatch(id,e.terrain))continue;
+   // Unrevealed seeds count as Resistance-owned for event allocation.
+   state.eventOwnership[state.infected.includes(id)?'spread':'resistance'].push(id);
+ }
+ log('日历事件：'+e.name+'（公开感染格 '+state.eventOwnership.spread.length+'，其他地形格 '+state.eventOwnership.resistance.length+'）。');
+}
+function searchFree(id){return ['rain','blizzard'].includes(eventId())&&eventSide(id,'resistance')&&!(state.eventUsedResistance||[]).includes(id)}
+function searchCost(id){
+ if(searchFree(id))return 0;
+ const surcharge=['overgrowth','heatwave','thaw'].includes(eventId())&&eventSide(id,'resistance');
+ return surcharge?2:1;
+}
+function searchAllowed(id){return !(eventId()==='sandstorm'&&eventSide(id,'resistance'))}
+function clearCost(id){return 2}
+function eventCard(){
+ const e=activeEvent();if(!e)return '';
+ const privateView=['resistance','handoff'].includes(state.phase);
+ const own=state.eventOwnership||{spread:[],resistance:[]};
+ const status=privateView?'本地图：公开感染 '+own.spread.filter(id=>Math.floor(id/CELLS_PER_MAP)===state.activeMap).length+' 格，其他 '+own.resistance.filter(id=>Math.floor(id/CELLS_PER_MAP)===state.activeMap).length+' 格':'触发时归属：Spread '+own.spread.length+' 格 / Resistance '+own.resistance.length+' 格';
+ return '<div class="event-card"><span class="event-symbol">'+TERRAIN[e.terrain].icon+'</span><div><b>第 '+state.round+' 轮 · '+e.name+'</b><small>'+e.effect+'</small><small>'+status+'；隐藏种子按 Resistance 格结算。</small></div></div>';
+}
 
-}
-function searchCost(id){return 1+((eventId()==='overgrowth'&&terrainMatch(id,'plains'))||(['freeze','thaw'].includes(eventId())&&terrainMatch(id,'snow'))?1:0)}
-function searchAllowed(id){return !((eventId()==='sandstorm'&&terrainMatch(id,'desert'))||(eventId()==='sinkhole'&&terrainMatch(id,'plains')))}
-function clearCost(id){
- if(eventId()==='rain'&&terrainMatch(id,'plains')&&!state.eventFreeUsed)return 0;
- if(eventId()==='drought'&&terrainMatch(id,'desert')&&state.eventFreeUsed<2)return 0;
- if(['blizzard','freeze'].includes(eventId())&&terrainMatch(id,'snow'))return 1;
- if(eventId()==='heatwave'&&terrainMatch(id,'desert'))return 3;
- return 2;
-}
-function eventCard(){const e=activeEvent();return e?'<div class="event-card"><span class="event-symbol">'+TERRAIN[e.terrain].icon+'</span><div><b>第 '+state.round+' 轮 · '+e.name+'</b><small>'+e.effect+'</small></div></div>':''}
 function calendarCard(){
  const c=state.calendar;
  return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><div class="calendar-track">'+Array.from({length:10},(_,i)=>{const round=i+1,key=c.events[round],event=EVENTS[key];return '<div class="calendar-day '+(round===state.round?'now ':'')+(key?'has-event':'')+'"><span>'+round+'</span><b>'+(event?TERRAIN[event.terrain].icon:'·')+'</b></div>'}).join('')+'</div><small>'+Object.entries(c.events).map(([r,id])=>'第'+r+'轮 '+EVENTS[id].name).join(' · ')+'</small></div>';

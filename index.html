@@ -109,6 +109,7 @@ body{background-color:#eee8d9;background-image:repeating-linear-gradient(0deg,tr
 .triangle-cell.sowing-ban::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 5px,#492b354a 5px 7px);pointer-events:none}
 
 .event-duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0}.event-side{padding:9px;border-radius:7px;border:1px solid #d4c7ae;background:#f7f1e5}.event-side.pos{border-left:4px solid #6e9273}.event-side.neg{border-left:4px solid #b47762}.event-side strong{display:block;font-size:13px}.event-side small{line-height:1.45}.triangle-cell.search-blocked{box-shadow:inset 0 0 0 3px #bc9456!important}.triangle-cell.clear-blocked{box-shadow:inset 0 0 0 3px #b36767!important}.triangle-cell.source-blocked{outline:2px solid #a65767}.triangle-cell.sowing-ban{box-shadow:inset 0 0 0 3px #735a4a!important}@media(max-width:600px){.event-duo{grid-template-columns:1fr}}
+.calendar-details{display:grid;gap:7px;margin-top:10px}.calendar-detail{padding:7px 8px;background:#f5efe4;border-radius:6px;text-align:left}.calendar-detail strong{display:block;font-size:12px}.calendar-detail small{display:block;line-height:1.45;margin-top:2px}.calendar-signs{display:flex;flex-direction:column;font-size:10px;line-height:1.05;font-weight:800}.calendar-signs span{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -182,6 +183,18 @@ const CALENDARS=[
  {name:'C · 干旱与冰封',events:{3:'thaw',6:'heatwave',9:'freeze'}},
  {name:'D · 融雪与塌陷',events:{3:'sinkhole',6:'sandstorm',9:'blizzard'}}
 ];
+function drawCalendar(base){
+ // Draw the full set of results ONCE when the game starts.
+ // Both factions can see the already-fixed results in the calendar.
+ const events={...base.events},rolls={};
+ for(const round of Object.keys(events)){
+  rolls[round]={
+   spread:rand(2)===0?'positive':'negative',
+   resistance:rand(2)===0?'positive':'negative'
+  };
+ }
+ return {...base,events,rolls};
+}
 
 function terrainOf(id){return state.maps[Math.floor(id/CELLS_PER_MAP)].terrain[id%CELLS_PER_MAP]}
 function eventId(){return state.eventId||''}
@@ -258,8 +271,9 @@ function runCalendarEvent(){
  if(!state.eventId)return;
  const ev=activeEvent(),snapshot=new Set(state.infected);
  for(let id=0;id<24;id++)if(terrainMatch(id,ev.terrain))state.eventOwnership[snapshot.has(id)?'spread':'resistance'].push(id);
- // Each SIDE rolls once, independently. Hidden seeds count exactly like empty tiles.
- state.weatherRoll={spread:rand(2)?'positive':'negative',resistance:rand(2)?'positive':'negative'};
+ // Both independent draws were fixed when the calendar was created at the start.
+ // Never reroll on the event turn.
+ state.weatherRoll={...state.calendar.rolls[state.round]};
  const se=weatherEffect('spread'),re=weatherEffect('resistance');
  function apply(effect,side){
   const owners=state.eventOwnership[side];
@@ -305,7 +319,20 @@ function eventCard(){
 }
 function calendarCard(){
  const c=state.calendar;
- return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><div class="calendar-track">'+Array.from({length:10},(_,i)=>{const round=i+1,key=c.events[round],event=EVENTS[key];return '<div class="calendar-day '+(round===state.round?'now ':'')+(key?'has-event':'')+'"><span>'+round+'</span><b>'+(event?TERRAIN[event.terrain].icon:'·')+'</b></div>'}).join('')+'</div><small>'+Object.entries(c.events).map(([r,id])=>'第'+r+'轮 '+EVENTS[id].name).join(' · ')+'</small></div>';
+ const days=Array.from({length:10},(_,i)=>{
+  const round=i+1,key=c.events[round],ev=EVENTS[key],roll=c.rolls?.[round];
+  const marks=roll?'<small class="calendar-signs"><span>S'+(roll.spread==='positive'?'+':'−')+'</span><span>R'+(roll.resistance==='positive'?'+':'−')+'</span></small>':'';
+  return '<div class="calendar-day '+(round===state.round?'now ':'')+(key?'has-event':'')+'"><span>'+round+'</span><b>'+(ev?TERRAIN[ev.terrain].icon:'·')+'</b>'+marks+'</div>';
+ }).join('');
+ const details=Object.entries(c.events).map(([r,key])=>{
+  const ev=EVENTS[key],roll=c.rolls?.[r];
+  if(!roll)return '<div class="calendar-detail">第'+r+'轮 · '+ev.name+'</div>';
+  const s=TERRAIN_EFFECTS[ev.terrain].spread[roll.spread],res=TERRAIN_EFFECTS[ev.terrain].resistance[roll.resistance];
+  return '<div class="calendar-detail"><strong>第'+r+'轮 · '+TERRAIN[ev.terrain].icon+' '+ev.name+'</strong>'+
+   '<small>Spread '+(roll.spread==='positive'?'＋':'－')+' '+s.name+' · '+s.description+'</small>'+
+   '<small>Resistance '+(roll.resistance==='positive'?'＋':'－')+' '+res.name+' · '+res.description+'</small></div>';
+ }).join('');
+ return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><small>开局已经确定全部正负效果，本局不会再随机</small><div class="calendar-track">'+days+'</div><div class="calendar-details">'+details+'</div></div>';
 }
 
 const mapNames=['北湾三角洲','东岬群岛','长风海角','翡翠滩','月影湾','赤岩海岸','银沙群岛','霜叶半岛','紫藤岬','琥珀群礁','苍蓝港','珊瑚滩','暮光湾','青岚群岛','金雀海角'];
@@ -408,11 +435,11 @@ function upgradeCoasts() {
 }
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
-  const calendar=CALENDARS[rand(CALENDARS.length)];
+  const calendar=drawCalendar(CALENDARS[rand(CALENDARS.length)]);
   state={calendar,terrainWeatherVersion:3,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},weatherRoll:null,weatherLocks:{},weatherCleanseTargets:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
-function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV25',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV25')}catch(e){}}
+function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV26',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV26')}catch(e){}}
 function updateRemainingWeather() {
   const calendar = CALENDARS.find(entry => entry.name === state.calendar?.name);
   if (!calendar || state.phase === 'finished') return;
@@ -425,9 +452,11 @@ function updateRemainingWeather() {
 }
 function load(){
  try{
-  const saved=localStorage.getItem('spreadResistanceSaveV25');
+  const saved=localStorage.getItem('spreadResistanceSaveV26')||localStorage.getItem('spreadResistanceSaveV25');
   if(!saved)return;
   state=JSON.parse(saved);
+  // Upgrade an in-progress old save once, without changing its remaining calendar again.
+  if(!state.calendar?.rolls)state.calendar=drawCalendar(state.calendar);
   upgradeCoasts();
   state.weatherLocks??={};state.weatherCleanseTargets??=[];
   state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];
@@ -658,7 +687,7 @@ function render(){
     $('#side').textContent = '';
     return;
   }
-    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro"><strong>地形 × 双阵营随机天气测试版</strong>。每局第 3、6、9 轮发生地形天气，Spread 与 Resistance 在事件发生时各自独立随机正负效果；每张地图的八个格子随机拥有平原、沙漠或雪地，出海口与地形重叠。10 轮之内 Spread 必须占满全图，Resistance 只需守住任何空格。<br>基础玩法：从 15 种不同形状及颜色的不同轮廓的地图中抽出三张三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图，随后 Spread 在全图任选两个不同格子放置初始种子（可同图）；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；Spread 每轮最多选择 2 个公开感染自行决定传播位置，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>Spread 在全图任意两个不同格子放初始种子（可同图）；每轮常规主动放置 1 颗种子，额外天气扩散单独从对应感染地形格发动。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 3 次共享行动，不需要预先分配。搜索种子通常用 1 AP，清除公开感染花费 2 AP。每清除 1 个，行动者下一轮个人 AP +1。第 9 轮起，各玩家根据本岛未公开感染格获得最多 +2 AP。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，Spread 每轮最多选择 2 个成熟感染向相邻空格埋下隐藏种子，随后 Resistance 才能搜索或清除。本轮三位 Resistance 都行动完毕后，所有剩余种子公开为感染。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="terrain-legend">🌿 平原　☀ 沙漠　❄ 雪地　⚓ 出海口　🦠 公开感染　🌾 隐藏种子<br>日历提前显示天气轮次和对应地形，发生时双方各随机正面或负面效果。公开感染格属于 Spread；空格和隐藏种子格属于 Resistance。地图显示封锁状态，不需要计算储备。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Spread 在 10 轮内占满全图获胜；Resistance 清空感染或撑过第 10 轮获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮基础 1 AP，团队共享 3 AP。搜索通常 1 AP；清除感染花费 2 AP。第 9 轮起，每个 Resistance 根据自己地图上未公开感染格数，每 2 格获得 +1 AP，最多 +2 AP。隐藏种子也计入。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
+    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro"><strong>地形 × 双阵营随机天气测试版</strong>。每局第 3、6、9 轮发生地形天气，开局已为 Spread 和 Resistance 独立随机好所有正负效果，日历直接公开且全局固定；每张地图的八个格子随机拥有平原、沙漠或雪地，出海口与地形重叠。10 轮之内 Spread 必须占满全图，Resistance 只需守住任何空格。<br>基础玩法：从 15 种不同形状及颜色的不同轮廓的地图中抽出三张三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图，随后 Spread 在全图任选两个不同格子放置初始种子（可同图）；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；Spread 每轮最多选择 2 个公开感染自行决定传播位置，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>Spread 在全图任意两个不同格子放初始种子（可同图）；每轮常规主动放置 1 颗种子，额外天气扩散单独从对应感染地形格发动。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 3 次共享行动，不需要预先分配。搜索种子通常用 1 AP，清除公开感染花费 2 AP。每清除 1 个，行动者下一轮个人 AP +1。第 9 轮起，各玩家根据本岛未公开感染格获得最多 +2 AP。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，Spread 每轮最多选择 2 个成熟感染向相邻空格埋下隐藏种子，随后 Resistance 才能搜索或清除。本轮三位 Resistance 都行动完毕后，所有剩余种子公开为感染。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="terrain-legend">🌿 平原　☀ 沙漠　❄ 雪地　⚓ 出海口　🦠 公开感染　🌾 隐藏种子<br>开局日历已经随机生成并公开了每个事件的两方正负效果，不会临时重抽。公开感染格属于 Spread；空格和隐藏种子格属于 Resistance。地图显示封锁状态，不需要计算储备。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Spread 在 10 轮内占满全图获胜；Resistance 清空感染或撑过第 10 轮获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮基础 1 AP，团队共享 3 AP。搜索通常 1 AP；清除感染花费 2 AP。第 9 轮起，每个 Resistance 根据自己地图上未公开感染格数，每 2 格获得 +1 AP，最多 +2 AP。隐藏种子也计入。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
   if(state.phase==='finished'){
     const spread=state.winner==='Spread',opening=!!state.openingElimination;main.innerHTML=`<div class="winner ${spread?'spread':''}"><div class="emoji">${opening?'⚪':spread?'🦠':'🛡️'}</div><div class="eyebrow">${opening?'统计外对局 · 第一轮':'游戏结束'}</div><h2>${opening?'开局淘汰':spread?'Spread 获胜':'Resistance 获胜'}</h2><p>${escapeHtml(state.winReason)}。第 ${state.round} 轮结束，共有 ${state.infected.length} 个公开感染和 ${state.seeds.length} 个隐藏种子。${opening?'本局不计入 Spread 或 Resistance 的胜率。':''}</p><button onclick="window.newGame()">再开一局</button></div><div class="actionrow"><button class="secondary" onclick="window.toggleFinalBoard()">查看 Spread 全图</button></div><div id="finalBoard"></div>`;renderSide();return
   }
@@ -716,7 +745,7 @@ $('#newGameBtn').onclick=window.newGame;
 const lessons = [
   ['选择席位','1 位 Spread 对抗 3 位 Resistance。每个席位都能交给 AI。你可以先当 Spread，观察种子如何沿着路线扩散。'],
   ['连接港口','锚形标记只会出现在有外露边的三角格上。点 A 图一个港口，再点 B 图一个港口。用剩下的港口把 C 图也连进来，再点「完成拼接」。'],
-  ['埋下种子','Spread 开局放两颗种子。日历提前告诉玩家什么时候会影响哪种地形，正负效果在事件发生时分别随机抽取。Spread 正面可能沿路径或从源格播种，负面会封锁传播；Resistance 也同时获得一张正面或负面效果。之后仍然有最多两次基础扩散和一次主动播种。'],
+  ['埋下种子','Spread 开局放两颗种子。开局日历就会把每轮对应地形、Spread 正负和 Resistance 正负全部随机生成并公开，事件发生时不会重新抽取。Spread 正面可能沿路径或从源格播种，负面会封锁传播；Resistance 也同时获得一张正面或负面效果。之后仍然有最多两次基础扩散和一次主动播种。'],
   ['搜查自己的地图','叶形是隐藏种子，只有 Spread 看得见。星芒是公开感染。Resistance 选一个格子，花 1 点搜索种子，或花 2 点清除公开感染。每人基础 1 点个人行动，另有团队共用的 3 点。'],
   ['沟通与胜负','可以在语音中报出地图字母、格号和搜索结果，交流免费。本轮三位 Resistance 都行动完毕后，手动和自动种子一起结算，未清除的全部公开为感染。24 格全部有种子或感染时 Spread 胜，全部清空或撑到第 10 轮结束 Resistance 胜。']
 ];

@@ -124,9 +124,9 @@ const EVENTS={
  sinkhole:{name:'地面塌陷',terrain:'plains',side:'Mixed',effect:'平原出海口关闭；平原无法搜索隐藏种子'},
  sandstorm:{name:'沙尘暴',terrain:'desert',side:'Spread',effect:'沙漠感染额外扩散最多 3 次；沙漠无法搜索种子'},
  drought:{name:'极端干旱',terrain:'desert',side:'Resistance',effect:'沙漠感染不能扩散或接收新种子；免费清除最多 2 个沙漠感染'},
- heatwave:{name:'热浪',terrain:'desert',side:'Spread',effect:'沙漠隐藏种子提前成熟；清除沙漠感染 +1 AP'},
+ heatwave:{name:'热浪',terrain:'desert',side:'Spread',effect:'沙漠成熟感染额外扩散最多 2 次；清除沙漠感染 +1 AP'},
  blizzard:{name:'暴风雪',terrain:'snow',side:'Resistance',effect:'雪地感染不能扩散；雪地清除感染仅需 1 AP'},
- thaw:{name:'融雪',terrain:'snow',side:'Spread',effect:'雪地隐藏种子提前成熟；雪地感染额外扩散最多 2 次'},
+ thaw:{name:'融雪',terrain:'snow',side:'Spread',effect:'雪地成熟感染额外扩散最多 2 次，雪地搜索额外消耗 1 AP'},
  freeze:{name:'冰封',terrain:'snow',side:'Mixed',effect:'雪地出海口关闭；雪地搜索 +1 AP，清除感染仅需 1 AP'}
 };
 const CALENDARS=[
@@ -145,24 +145,17 @@ function spreadNeighbors(id){
  return neighbors(id).filter(n=>!(linkedExit(id)&&linkedExit(id).includes(n)&&(blockedHarbor(id)||blockedHarbor(n)))&&!(eventId()==='drought'&&terrainMatch(n,'desert')));
 }
 function canSourceSpread(id){const e=activeEvent();return !(e&&['rain','drought','blizzard'].includes(eventId())&&terrainMatch(id,e.terrain))}
-function eventBonusLimit(){return ({overgrowth:3,sandstorm:3,thaw:2})[eventId()]||0}
-function eventBonusSource(id){const e=activeEvent();return e&&['overgrowth','sandstorm','thaw'].includes(eventId())&&terrainMatch(id,e.terrain)}
+function eventBonusLimit(){return ({overgrowth:3,sandstorm:3,heatwave:2,thaw:2})[eventId()]||0}
+function eventBonusSource(id){const e=activeEvent();return e&&['overgrowth','sandstorm','heatwave','thaw'].includes(eventId())&&terrainMatch(id,e.terrain)}
 function runCalendarEvent(){
  state.eventId=state.calendar.events[state.round]||'';
  state.eventFreeUsed=0;
  if(!state.eventId)return;
  const e=activeEvent();
  log('日历事件：'+e.name+'（'+e.effect+'）');
- if(['heatwave','thaw'].includes(state.eventId)){
-   const remaining=[];
-   for(const seed of state.seeds){
-     if(terrainMatch(seed.id,e.terrain)){if(!state.infected.includes(seed.id))state.infected.push(seed.id)}
-     else remaining.push(seed);
-   }
-   state.seeds=remaining;
- }
+
 }
-function searchCost(id){return 1+((eventId()==='overgrowth'&&terrainMatch(id,'plains'))||(eventId()==='freeze'&&terrainMatch(id,'snow'))?1:0)}
+function searchCost(id){return 1+((eventId()==='overgrowth'&&terrainMatch(id,'plains'))||(['freeze','thaw'].includes(eventId())&&terrainMatch(id,'snow'))?1:0)}
 function searchAllowed(id){return !((eventId()==='sandstorm'&&terrainMatch(id,'desert'))||(eventId()==='sinkhole'&&terrainMatch(id,'plains')))}
 function clearCost(id){
  if(eventId()==='rain'&&terrainMatch(id,'plains')&&!state.eventFreeUsed)return 0;
@@ -433,8 +426,32 @@ function aiAutoSpread(){
   if(target!==null)chooseAutoInfection(target);else advanceAutoSpread();
 }
 function aiSpread(){if(state.phase!=='spread'||!state.ai?.spread)return;const legal=legalSeedCells();const id=pickBest(legal,n=>localNeighbors(n).filter(x=>!occupied(x)).length);if(id!==null)placeSpreadSeed(id);else endSpread()}
-function aiResistance(){if(state.phase!=='resistance'||!state.ai?.resistance[state.activeMap])return;const m=state.activeMap;let budget=(state.ap[m]||0)+Math.min(1,state.sharedPool);while(budget>0){const infected=state.infected.filter(id=>Math.floor(id/CELLS_PER_MAP)===m);if(infected.length&&budget>=2){const target=pickBest(infected,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);state.infected=state.infected.filter(id=>id!==target);spend(2);state.nextApBonus??=[0,0,0];state.nextApBonus[m]++;budget-=2;log(`${owners[m]} AI 花费 2 次行动清除了 ${cellLabel(target)} 的公开感染。`);continue}const fresh=Array.from({length:CELLS_PER_MAP},(_,i)=>mapId(m,i)).filter(id=>!state.infected.includes(id)&&!(state.aiEmpty||[]).includes(id));const hot=new Set(infected.flatMap(id=>localNeighbors(id)));const clues=fresh.filter(id=>hot.has(id));const target=pickBest(clues.length?clues:fresh,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);if(target===null)break;spend(1);budget--;const si=state.seeds.findIndex(s=>s.id===target);if(si>=0){state.seeds.splice(si,1);log(`${owners[m]} AI 搜索 ${cellLabel(target)}，找到并清除了隐藏种子。`)}else{state.aiEmpty.push(target);log(`${owners[m]} AI 搜索 ${cellLabel(target)}，没有找到种子。`)}}
-  persist();finishMap()
+function aiResistance(){
+ if(state.phase!=='resistance'||!state.ai?.resistance[state.activeMap])return;
+ const m=state.activeMap;let steps=0;
+ while(steps++<CELLS_PER_MAP*2){
+  const infected=state.infected.filter(id=>Math.floor(id/CELLS_PER_MAP)===m);
+  const affordable=infected.filter(id=>availableAP(m)>=clearCost(id));
+  if(affordable.length){
+   const target=pickBest(affordable,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);
+   const cost=clearCost(target);
+   if(cost===0)state.eventFreeUsed++;
+   state.infected=state.infected.filter(id=>id!==target);
+   spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[m]++;
+   log(owners[m]+' AI 花费 '+cost+' AP 清除了 '+cellLabel(target)+'。');
+   continue;
+  }
+  const fresh=Array.from({length:CELLS_PER_MAP},(_,i)=>mapId(m,i)).filter(id=>!state.infected.includes(id)&&!(state.aiEmpty||[]).includes(id)&&searchAllowed(id)&&availableAP(m)>=searchCost(id));
+  const hot=new Set(infected.flatMap(id=>localNeighbors(id)));
+  const clues=fresh.filter(id=>hot.has(id));
+  const target=pickBest(clues.length?clues:fresh,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);
+  if(target===null)break;
+  spend(searchCost(target));
+  const si=state.seeds.findIndex(s=>s.id===target);
+  if(si>=0){state.seeds.splice(si,1);log(owners[m]+' AI 搜索 '+cellLabel(target)+'，找到隐藏种子。')}
+  else{state.aiEmpty.push(target);log(owners[m]+' AI 搜索 '+cellLabel(target)+'，未找到种子。')}
+ }
+ persist();finishMap();
 }
 function runAI(){if(state?.phase==='stitch'&&state.ai?.spread){aiStitch();return}if(state?.phase==='setup'&&state.ai?.spread){aiPlaceInitialSeeds();return}if(state?.phase==='handoff'&&isAISeat(state.nextRole)){continueHandoff();return}if(state?.phase==='autoSpread'&&state.ai?.spread){aiAutoSpread();return}if(state?.phase==='spread'&&state.ai?.spread){aiSpread();return}if(state?.phase==='resistance'&&state.ai?.resistance[state.activeMap])aiResistance()}
 function scheduleAI(){if(aiTimer!==null||!state)return;const active=(state.phase==='stitch'&&state.ai?.spread)||(state.phase==='setup'&&state.ai?.spread)||(state.phase==='handoff'&&isAISeat(state.nextRole))||(state.phase==='autoSpread'&&state.ai?.spread)||(state.phase==='spread'&&state.ai?.spread)||(state.phase==='resistance'&&state.ai?.resistance[state.activeMap]);if(!active)return;aiTimer=setTimeout(()=>{aiTimer=null;runAI()},420)}

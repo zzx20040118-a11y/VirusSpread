@@ -12,7 +12,7 @@ Use the player selectors at the top of the screen to set any of the four seats t
 
 ## Terrain calendar playtest
 
-Weather happens on rounds 3, 6 and 9. The full calendar is visible from setup. On spread weather, each matching public infection can grow into at most four spaces along its connected growth. Every calendar ends with cleansing weather on round 9. Each matching tile that was clear or secretly seeded at the trigger automatically clears itself and its neighbors, including hidden seeds.
+Weather happens on rounds 3, 6 and 9. The full calendar is visible from setup. On round 3, each matching public infection can grow by up to four spaces. On round 6, each matching public infection automatically spreads through adjacent non-infected areas. A crossing can relay through the far harbor even if it is already infected. Round 9 relief originates at each matching clear or secretly seeded tile and cleans its island and directly linked islands. All sources use the terrain snapshot at event start.
 
 Clearing a public infection costs two AP in every round. A normal search costs one. Each Resistance player receives one personal AP and the team shares three. Each clear grants that player one extra AP next round. Local mobilization begins on round 9. Spread starts with two seeds on distinct cells, which may be on the same island. From round 2 it can use two distinct public sources for basic spread and plant one manual seed. Full coverage wins for Spread. Complete cleanup or surviving round 10 wins for Resistance.
 

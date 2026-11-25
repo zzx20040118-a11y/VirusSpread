@@ -48,6 +48,31 @@ Function('assert', engine + `
   state.infected=[0]; state.ap=[1,0,0]; state.sharedPool=1; selected=0;
   clearInfection();
   assert.deepEqual(state.infected,[]); assert.equal(availableAP(),0);
+  // Ordinary rounds keep the original manual/AP rules and reveal only remaining seeds.
+  for (const round of [2,4,5,7,8,10]) {
+    makeGame(); state.round=round; state.infected=[0,8,16];
+    startSpreadRound();
+    assert.equal(state.eventId,''); assert.equal(state.spreadLeft,1);
+    assert.equal(state.phase,'autoSpread');
+    for(let i=0;i<2;i++){
+      const source=availableAutoSources()[0];
+      chooseAutoInfection(source); chooseAutoInfection(currentAutoChoices()[0]);
+    }
+    assert.equal(new Set(state.autoUsed).size,2);
+    assert.equal(state.phase,'spread'); placeSpreadSeed(legalSeedCells()[0]);
+    assert.equal(state.seeds.length,3); assert.equal(state.sharedPool,3);
+    assert.equal(clearCost(0),2);
+    finishResistanceRound();
+    assert.equal(state.infected.length,6); assert.equal(state.seeds.length,0);
+  }
+  makeGame(); state.links=[[0,8],[9,16]];
+  state.eventOwnership={spread:[],resistance:[0]};
+  assert.deepEqual([...weatherReliefIslands()].sort(),[0,1]);
+  state.round=6;state.calendar=CALENDARS[0];
+  state.maps.forEach(map=>map.terrain.fill('snow'));
+  state.maps[0].terrain[0]='plains';state.infected=[0];
+  startSpreadRound();assert.equal(state.winner,'Spread');
+  assert.equal(state.infected.length,24);
   for (const layout of layoutPool) {
   const coords = layout.coords.slice(0,8);
   const ports = coastalPorts(coords);

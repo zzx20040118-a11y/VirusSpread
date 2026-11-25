@@ -140,16 +140,39 @@ const CELLS_PER_MAP=8;
 const MAX_ROUNDS=10;
 const RESISTANCE_MOBILIZE_AT=9, MAX_MOBILIZATION_AP=2;
 const TERRAIN={plains:{name:'平原',icon:'🌿'},desert:{name:'沙漠',icon:'☀'},snow:{name:'雪地',icon:'❄'}};
+// A calendar predicts the terrain, never the two independent polarity rolls.
 const EVENTS={
- overgrowth:{name:'植被疯长',terrain:'plains',seedsPerSource:3,effect:'每个公开感染平原格可沿一条不折返的路径，依次埋下最多 3 颗隐藏种子；其他平原格可免费搜索一次。'},
- rain:{name:'平原暴雨',terrain:'plains',effect:'本轮所有平原格及其相邻格禁播：不能从中播种，也不能向其中播种。已有种子照常成熟。'},
- sandstorm:{name:'沙尘暴',terrain:'desert',effect:'公开感染的沙漠格卷起沙暴，顺相连空格蔓延为公开感染，沙漠可直接向已感染的平原传风，跨海后对岸港口可以接力。其他沙漠格本轮不能搜索。'},
- heatwave:{name:'热浪',terrain:'desert',effect:'公开感染的沙漠格卷起热浪，顺相连空格蔓延为公开感染，沙漠可直接向已感染的雪地传热，跨海后对岸港口可以接力。其他沙漠格可免费搜索一次。'},
- thaw:{name:'融雪',terrain:'snow',effect:'每个公开感染雪地格同时向所有相邻空格埋下隐藏种子；其他雪地格可免费搜索一次。'},
- freeze:{name:'冰封救援',terrain:'snow',purge:true,effect:'每个无公开感染的雪地格清理本岛与直接相连岛。公开感染的雪地港口本轮封闭。'},
- blizzard:{name:'暴风雪',terrain:'snow',purge:true,effect:'每个无公开感染的雪地格清理本岛与直接相连岛，并可免费搜索一次。公开感染雪地本轮不能基础扩散。'},
- sinkhole:{name:'平原塌陷',terrain:'plains',effect:'本轮和下一轮，所有平原格及其相邻格禁止播种。'},
- drought:{name:'干旱',terrain:'desert',purge:true,effect:'其他沙漠格清理自身及相邻格，公开感染沙漠格本轮不能基础扩散。'}
+ overgrowth:{name:'平原生长季',terrain:'plains'},rain:{name:'平原雨季',terrain:'plains'},
+ sinkhole:{name:'平原地动',terrain:'plains'},sandstorm:{name:'沙漠沙尘暴',terrain:'desert'},
+ drought:{name:'沙漠干旱季',terrain:'desert'},heatwave:{name:'沙漠热浪',terrain:'desert'},
+ blizzard:{name:'雪地暴风雪',terrain:'snow'},thaw:{name:'雪地融雪',terrain:'snow'},
+ freeze:{name:'雪地冰封',terrain:'snow'}
+};
+const TERRAIN_EFFECTS={
+ plains:{
+  spread:{
+   positive:{name:'藤蔓蔓延',description:'每个平原公开感染格沿不走回头路的路径播下最多 3 颗种子',kind:'path',quota:3},
+   negative:{name:'土壤封锁',description:'每个平原公开感染格及其邻格本轮禁止播种',kind:'sowlock',rounds:1}},
+  resistance:{
+   positive:{name:'净土行动',description:'每个非公开感染平原格清除自己或邻格的一处公开感染',kind:'cleanOne'},
+   negative:{name:'浓雾遮蔽',description:'每个非公开感染平原格及其邻格本轮不能搜索种子',kind:'searchlock',rounds:1}}
+ },
+ desert:{
+  spread:{
+   positive:{name:'沙暴播种',description:'每个沙漠公开感染格向自身相邻空格播下最多 3 颗种子',kind:'fan',quota:3},
+   negative:{name:'流沙封地',description:'每个沙漠公开感染格及其邻格禁止播种两轮',kind:'sowlock',rounds:2}},
+  resistance:{
+   positive:{name:'沙墙防线',description:'每个非公开感染沙漠格及其邻格本轮不能接收新种子',kind:'sowlock',rounds:1},
+   negative:{name:'沙尘遮眼',description:'每个非公开感染沙漠格及其邻格本轮不能搜索种子',kind:'searchlock',rounds:1}}
+ },
+ snow:{
+  spread:{
+   positive:{name:'雪崩蔓延',description:'每个雪地公开感染格沿不回头的路径播下最多 3 颗种子',kind:'path',quota:3},
+   negative:{name:'病毒冻结',description:'每个雪地公开感染格无法扩散，感染港口本轮封闭',kind:'sourcelock',rounds:1}},
+  resistance:{
+   positive:{name:'冰川防护',description:'每个非公开感染雪地格和邻格两轮不能接收种子',kind:'sowlock',rounds:2},
+   negative:{name:'救援受阻',description:'每个非公开感染雪地格周围公开感染本轮不能清除',kind:'clearlock',rounds:1}}
+ }
 };
 const CALENDARS=[
  {name:'A · 风暴交替',events:{3:'overgrowth',6:'sandstorm',9:'freeze'}},
@@ -161,139 +184,105 @@ const CALENDARS=[
 function terrainOf(id){return state.maps[Math.floor(id/CELLS_PER_MAP)].terrain[id%CELLS_PER_MAP]}
 function eventId(){return state.eventId||''}
 function activeEvent(){return EVENTS[eventId()]||null}
+function weatherEffect(side){const e=activeEvent(),sign=state.weatherRoll?.[side];return e&&sign?TERRAIN_EFFECTS[e.terrain][side][sign]:null}
 function terrainMatch(id,t){return terrainOf(id)===t}
 function eventSide(id,side){return (state.eventOwnership?.[side]||[]).includes(id)}
-function blockedHarbor(id){return eventId()==='freeze'&&eventSide(id,'spread')&&!!linkedExit(id)}
-function protectedTerrainTarget(id){return ['drought'].includes(eventId())&&eventSide(id,'resistance')}
-function visibleSowingBan(id, isSpread) {
-  if (!state.sowingBan?.includes(id)) return false;
-  if (isSpread) return true;
-  const island = Math.floor(id / CELLS_PER_MAP);
-  return [id,...neighbors(id)].some(n => Math.floor(n/CELLS_PER_MAP)===island && terrainOf(n)==='plains');
+function activeWeatherLock(kind,id){return (state.weatherLocks?.[kind]?.[id]||0)>=state.round}
+function addWeatherLock(kind,id,rounds){
+ state.weatherLocks??={};state.weatherLocks[kind]??={};
+ state.weatherLocks[kind][id]=Math.max(state.weatherLocks[kind][id]||0,state.round+rounds-1);
 }
+function clearExpiredWeatherLocks(){
+ state.weatherLocks??={};
+ for(const kind of Object.keys(state.weatherLocks))
+  for(const [id,until] of Object.entries(state.weatherLocks[kind]))
+   if(until<state.round)delete state.weatherLocks[kind][id];
+}
+function weatherArea(id){return [id,...localNeighbors(id)]}
+function blockedHarbor(id){return activeWeatherLock('harbor',id)}
+function protectedTerrainTarget(id){return activeWeatherLock('sow',id)}
+function visibleSowingBan(id){return activeWeatherLock('sow',id)}
 function spreadNeighbors(id){
- if ((state.sowingBan||[]).includes(id)) return [];
- return neighbors(id).filter(n=>!(state.sowingBan||[]).includes(n)&&!protectedTerrainTarget(n)&&!(linkedExit(id)?.includes(n)&&(blockedHarbor(id)||blockedHarbor(n))));
+ if(activeWeatherLock('source',id)||activeWeatherLock('sow',id))return [];
+ return neighbors(id).filter(n=>!protectedTerrainTarget(n)&&!(linkedExit(id)?.includes(n)&&(blockedHarbor(id)||blockedHarbor(n))));
 }
-function canSourceSpread(id){return !(eventSide(id,'spread')&&['drought','blizzard'].includes(eventId()))}
-function eventSeedQuota(){return activeEvent()?.seedsPerSource || 0}
+function canSourceSpread(id){return !activeWeatherLock('source',id)&&!activeWeatherLock('sow',id)}
+function eventSeedQuota(){return weatherEffect('spread')?.quota||0}
 function prepareEventSeeds(){
  state.eventCharges={};state.eventFrontier={};
- const quota=eventSeedQuota();
- if(!quota)return;
- for(const id of state.eventOwnership.spread){
-   state.eventCharges[id]=quota;
-   state.eventFrontier[id]=[id];
- }
+ const effect=weatherEffect('spread');
+ if(!effect||!effect.quota)return;
+ for(const id of state.eventOwnership.spread){state.eventCharges[id]=effect.quota;state.eventFrontier[id]=[id]}
 }
 function eventFrontierChoices(id){
- const path = state.eventFrontier?.[id] || [id];
- return spreadNeighbors(path.at(-1)).filter(target => !occupied(target) && !path.includes(target));
+ const effect=weatherEffect('spread'),path=state.eventFrontier?.[id]||[id];
+ if(!effect)return [];
+ const origin=effect.kind==='fan'?id:path[path.length-1];
+ return spreadNeighbors(origin).filter(n=>!occupied(n)&&!path.includes(n));
 }
 function eligibleEventSources(){
- return Object.keys(state.eventCharges||{}).map(Number).filter(id=>
-   state.infected.includes(id)&&state.eventCharges[id]>0&&eventFrontierChoices(id).length>0);
+ return Object.keys(state.eventCharges||{}).map(Number).filter(id=>state.infected.includes(id)&&state.eventCharges[id]>0&&eventFrontierChoices(id).length>0);
 }
 function currentEventSource(){return selected!==null&&eligibleEventSources().includes(selected)?selected:null}
 function currentEventChoices(){const id=currentEventSource();return id===null?[]:eventFrontierChoices(id)}
-function beginEventSpread(){
- state.phase='eventSpread';selected=null;
- advanceEventSpread();
-}
-function advanceEventSpread(){
- if(!eligibleEventSources().length){beginAutoSpread();return}
- if(currentEventSource()===null)selected=null;
- persist();render();
-}
+function beginEventSpread(){state.phase='eventSpread';selected=null;advanceEventSpread()}
+function advanceEventSpread(){if(!eligibleEventSources().length){finishEventSpread();return}if(currentEventSource()===null)selected=null;persist();render()}
 function chooseEventSpread(id){
  if(state.phase!=='eventSpread')return;
  if(eligibleEventSources().includes(id)){selected=id;persist();render();return}
- const src=currentEventSource();
- if(src===null||!currentEventChoices().includes(id))return;
+ const src=currentEventSource();if(src===null||!currentEventChoices().includes(id))return;
  addSeed({id,sourceId:src,planted:state.round,matureAfter:state.round});
-
  state.eventCharges[src]--;state.eventFrontier[src].push(id);
- log('Spread 已沿藤蔓埋下一颗隐藏种子。');
+ log('Spread 天气传播：'+cellLabel(src)+' → '+cellLabel(id));
  if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
  if(!eligibleEventSources().includes(src))selected=null;
  advanceEventSpread();
 }
-function resolveWeatherFront() {
-  const infected = new Set(state.infected);
-  const reached = new Set(state.eventOwnership.spread);
-  // Only the initial matching infections launch fronts. Crossing a paired
-  // harbor lets the far shore relay the front even when already infected.
-  for (const source of reached) {
-    for (const target of spreadNeighbors(source)) {
-      const crossesSea = Math.floor(source / CELLS_PER_MAP) !== Math.floor(target / CELLS_PER_MAP);
-      const conducts = terrainOf(source) === 'desert' && terrainOf(target) === (eventId() === 'heatwave' ? 'snow' : 'plains');
-      if (crossesSea || conducts || !infected.has(target)) reached.add(target);
-    }
-  }
-  state.seeds = state.seeds.filter(seed => !reached.has(seed.id));
-  for (const id of reached) if (!infected.has(id)) state.infected.push(id);
-}
-function weatherReliefIslands() {
-  const origins = new Set(state.eventOwnership.resistance.map(id => Math.floor(id / CELLS_PER_MAP)));
-  const reached = new Set(origins);
-  for (const [a,b] of state.links) {
-    const left = Math.floor(a / CELLS_PER_MAP), right = Math.floor(b / CELLS_PER_MAP);
-    if (origins.has(left)) reached.add(right);
-    if (origins.has(right)) reached.add(left);
-  }
-  return reached;
+function finishEventSpread(){
+ const targets=state.weatherCleanseTargets||[];
+ if(targets.length){
+  state.infected=state.infected.filter(id=>!targets.includes(id));
+  state.weatherCleanseTargets=[];
+  log('天气净化完成；公开感染区已更新。');
+ }
+ if(!state.infected.length&&!state.seeds.length){endGame('Resistance','天气清除了全部种子与感染');return}
+ beginAutoSpread();
 }
 function runCalendarEvent(){
  state.eventId=state.calendar.events[state.round]||'';
  state.eventOwnership={spread:[],resistance:[]};
- state.eventUsedResistance=[];
- state.eventFreeUsed=0;
- if (state.round > (state.banThrough ?? 0)) state.sowingBan=[];
+ state.weatherRoll=null;state.weatherCleanseTargets=[];state.eventUsedResistance=[];
+ clearExpiredWeatherLocks();
  if(!state.eventId)return;
- const e=activeEvent();
- for(let id=0;id<CELLS_PER_MAP*3;id++){
-   if(!terrainMatch(id,e.terrain))continue;
-   // Unrevealed seeds count as Resistance-owned for event allocation.
-   state.eventOwnership[state.infected.includes(id)?'spread':'resistance'].push(id);
- }
- log('日历事件：'+e.name+'（公开感染格 '+state.eventOwnership.spread.length+'，其他地形格 '+state.eventOwnership.resistance.length+'）。');
- if (['rain','sinkhole'].includes(eventId())) {
-   const plains = [...state.eventOwnership.spread,...state.eventOwnership.resistance];
-   state.banThrough = state.round + (eventId() === 'sinkhole' ? 1 : 0);
-   state.sowingBan = [...new Set(plains.flatMap(id => [id,...neighbors(id)]))];
- }
- if (['sandstorm','heatwave'].includes(eventId())) resolveWeatherFront();
- if (eventId() === 'thaw') {
-   for (const id of state.eventOwnership.spread) {
-     for (const target of spreadNeighbors(id)) if (!occupied(target)) {
-       addSeed({id:target,sourceId:id,planted:state.round,matureAfter:state.round});
-     }
+ const ev=activeEvent(),snapshot=new Set(state.infected);
+ for(let id=0;id<24;id++)if(terrainMatch(id,ev.terrain))state.eventOwnership[snapshot.has(id)?'spread':'resistance'].push(id);
+ // Each SIDE rolls once, independently. Hidden seeds count exactly like empty tiles.
+ state.weatherRoll={spread:rand(2)?'positive':'negative',resistance:rand(2)?'positive':'negative'};
+ const se=weatherEffect('spread'),re=weatherEffect('resistance');
+ function apply(effect,side){
+  const owners=state.eventOwnership[side];
+  if(['sowlock','searchlock','clearlock','sourcelock'].includes(effect.kind)){
+   const kind={sowlock:'sow',searchlock:'search',clearlock:'clear',sourcelock:'source'}[effect.kind];
+   for(const id of owners){
+    for(const tile of (effect.kind==='sourcelock'?[id]:weatherArea(id)))addWeatherLock(kind,tile,effect.rounds);
+    if(effect.kind==='sourcelock'&&linkedExit(id))addWeatherLock('harbor',id,effect.rounds);
    }
- }
- if(e.purge){
-   // One recovery effect per Resistance-owned terrain tile.
-   // No hidden seed locations are revealed to the Resistance UI or logs.
-   const washed=new Set();
-   for(const id of state.eventOwnership.resistance)
-     for(const target of [id,...neighbors(id)])
-       if(state.infected.includes(target)||state.seeds.some(seed=>seed.id===target))
-         washed.add(target);
-   if (['freeze','blizzard'].includes(eventId())) {
-     const reached = weatherReliefIslands();
-     for (const id of [...state.infected, ...state.seeds.map(seed => seed.id)]) {
-       if (reached.has(Math.floor(id / CELLS_PER_MAP))) washed.add(id);
-     }
+  }else if(effect.kind==='cleanOne'){
+   const chosen=new Set();
+   for(const id of owners){
+    const target=weatherArea(id).find(tile=>snapshot.has(tile)&&!chosen.has(tile));
+    if(target!==undefined)chosen.add(target);
    }
-   if(washed.size){
-     state.infected=state.infected.filter(id=>!washed.has(id));
-     state.seeds=state.seeds.filter(seed=>!washed.has(seed.id));
-     log(e.name+'：天气清理已结算。');
-   }
+   state.weatherCleanseTargets=[...chosen];
+  }
  }
+ apply(se,'spread');apply(re,'resistance');
+ log(TERRAIN[ev.terrain].name+'天气：Spread '+se.name+'；Resistance '+re.name+'。');
 }
-function searchFree(id){return ['blizzard','overgrowth','heatwave','thaw'].includes(eventId())&&eventSide(id,'resistance')&&!(state.eventUsedResistance||[]).includes(id)}
-function searchCost(id){return searchFree(id)?0:1}
-function searchAllowed(id){return !(eventId()==='sandstorm'&&eventSide(id,'resistance'))}
+function searchFree(){return false}
+function searchCost(){return 1}
+function searchAllowed(id){return !activeWeatherLock('search',id)}
+function clearAllowed(id){return !activeWeatherLock('clear',id)}
 function clearCost(){return 2}
 function mobilizationBonus(m){
  if(state.round<RESISTANCE_MOBILIZE_AT)return 0;
@@ -302,15 +291,19 @@ function mobilizationBonus(m){
 }
 function eventCard(){
  const e=activeEvent();if(!e)return '';
- const privateView=['resistance','handoff'].includes(state.phase);
- const own=state.eventOwnership||{spread:[],resistance:[]};
- const status=privateView?'本地图：公开感染 '+own.spread.filter(id=>Math.floor(id/CELLS_PER_MAP)===state.activeMap).length+' 格，其他 '+own.resistance.filter(id=>Math.floor(id/CELLS_PER_MAP)===state.activeMap).length+' 格':'触发时归属：Spread '+own.spread.length+' 格 / Resistance '+own.resistance.length+' 格';
- return '<div class="event-card"><span class="event-symbol">'+TERRAIN[e.terrain].icon+'</span><div><b>第 '+state.round+' 轮 · '+e.name+'</b><small>'+e.effect+'</small><small>'+status+'；隐藏种子按 Resistance 格结算。</small></div></div>';
+ const se=weatherEffect('spread'),re=weatherEffect('resistance');
+ const sv=state.weatherRoll.spread==='positive',rv=state.weatherRoll.resistance==='positive';
+ const own=state.eventOwnership||{spread:[],resistance:[]},local=['resistance','handoff'].includes(state.phase);
+ const note=local?'本岛：公开感染 '+own.spread.filter(i=>Math.floor(i/8)===state.activeMap).length+' 格；其他 '+own.resistance.filter(i=>Math.floor(i/8)===state.activeMap).length+' 格':
+  '公开感染 '+own.spread.length+' 格；其他 '+own.resistance.length+' 格';
+ return '<div class="event-card"><span class="event-symbol">'+TERRAIN[e.terrain].icon+'</span><div><b>第 '+state.round+' 轮 · '+e.name+'</b>'+
+  '<div class="event-duo"><div class="event-side '+(sv?'pos':'neg')+'"><strong>Spread '+(sv?'＋':'－')+' · '+se.name+'</strong><small>'+se.description+'</small></div>'+
+  '<div class="event-side '+(rv?'pos':'neg')+'"><strong>Resistance '+(rv?'＋':'－')+' · '+re.name+'</strong><small>'+re.description+'</small></div></div>'+
+  '<small>'+note+'。按事件触发时的状态判定，隐藏种子不暴露。</small></div></div>';
 }
-
 function calendarCard(){
  const c=state.calendar;
- return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><div class="calendar-track">'+Array.from({length:10},(_,i)=>{const round=i+1,key=c.events[round],event=EVENTS[key];return '<div class="calendar-day '+(round===state.round?'now ':'')+(key?'has-event':'')+'"><span>'+round+'</span><b>'+(event?TERRAIN[event.terrain].icon:'·')+'</b></div>'}).join('')+'</div><small>'+Object.entries(c.events).map(([r,id])=>'第'+r+'轮 '+EVENTS[id].name+'').join(' · ')+'</small></div>';
+ return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><div class="calendar-track">'+Array.from({length:10},(_,i)=>{const round=i+1,key=c.events[round],event=EVENTS[key];return '<div class="calendar-day '+(round===state.round?'now ':'')+(key?'has-event':'')+'"><span>'+round+'</span><b>'+(event?TERRAIN[event.terrain].icon:'·')+'</b></div>'}).join('')+'</div><small>'+Object.entries(c.events).map(([r,id])=>'第'+r+'轮 '+EVENTS[id].name).join(' · ')+'</small></div>';
 }
 
 const mapNames=['北湾三角洲','东岬群岛','长风海角','翡翠滩','月影湾','赤岩海岸','银沙群岛','霜叶半岛','紫藤岬','琥珀群礁','苍蓝港','珊瑚滩','暮光湾','青岚群岛','金雀海角'];
@@ -414,7 +407,7 @@ function upgradeCoasts() {
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
   const calendar=CALENDARS[rand(CALENDARS.length)];
-  state={calendar,terrainWeatherVersion:2,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
+  state={calendar,terrainWeatherVersion:3,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},weatherRoll:null,weatherLocks:{},weatherCleanseTargets:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
 function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV24',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV24')}catch(e){}}
@@ -498,9 +491,9 @@ function placeInitial(){if(selected===null)return;if(state.seeds.some(s=>s.id===
 function startSpreadRound(){
   selected=null;actionMode='';
   if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
-  runCalendarEvent();if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}if(!state.infected.length&&!state.seeds.length){endGame('Resistance','天气清除了全部种子与感染');return}prepareEventSeeds();state.spreadLeft=1;
+  runCalendarEvent();if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}prepareEventSeeds();state.spreadLeft=1;
   state.autoSources=infectedSources();state.autoIndex=0;state.autoUsed=[];state.autoCount=0;state.autoExtraCount=0;state.autoExtraUsed=[];
-  if(eligibleEventSources().length)beginEventSpread();else beginAutoSpread();
+  if(eligibleEventSources().length)beginEventSpread();else finishEventSpread();
 }
 function placeSpreadSeed(id){
   if(state.spreadLeft<=0)return;
@@ -706,7 +699,7 @@ window.dragStart=dragStart;
 window.placeInitial=placeInitial;
 window.endSpread=endSpread;
 window.finishAutoSpread=()=>{if(state.phase==='autoSpread')beginManualSpread()};
-window.skipEventSpread=()=>{if(state.phase==='eventSpread')beginAutoSpread()};
+window.skipEventSpread=()=>{if(state.phase==='eventSpread')finishEventSpread()};
 
 
 window.continueHandoff=()=>{const p=state.nextPhase;state.nextRole='';state.nextPhase='';if(p==='spread'){startSpreadRound();return}if(p&&p.startsWith('resistance-')){showMapTurn(Number(p.slice(-1)));return}if(p==='resistance'){showMapTurn(0);return}};

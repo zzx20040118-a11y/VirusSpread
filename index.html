@@ -107,6 +107,8 @@ body{background-color:#eee8d9;background-image:repeating-linear-gradient(0deg,tr
 .tri-up .weather-count{top:auto;bottom:0}
 .tri-down .weather-count{top:0}
 .triangle-cell.sowing-ban::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 5px,#492b354a 5px 7px);pointer-events:none}
+
+.event-duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0}.event-side{padding:9px;border-radius:7px;border:1px solid #d4c7ae;background:#f7f1e5}.event-side.pos{border-left:4px solid #6e9273}.event-side.neg{border-left:4px solid #b47762}.event-side strong{display:block;font-size:13px}.event-side small{line-height:1.45}.triangle-cell.search-blocked{box-shadow:inset 0 0 0 3px #bc9456!important}.triangle-cell.clear-blocked{box-shadow:inset 0 0 0 3px #b36767!important}.triangle-cell.source-blocked{outline:2px solid #a65767}.triangle-cell.sowing-ban{box-shadow:inset 0 0 0 3px #735a4a!important}@media(max-width:600px){.event-duo{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -410,7 +412,7 @@ function makeGame(ai=aiSetup){
   state={calendar,terrainWeatherVersion:3,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},weatherRoll:null,weatherLocks:{},weatherCleanseTargets:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
-function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV24',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV24')}catch(e){}}
+function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV25',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV25')}catch(e){}}
 function updateRemainingWeather() {
   const calendar = CALENDARS.find(entry => entry.name === state.calendar?.name);
   if (!calendar || state.phase === 'finished') return;
@@ -421,21 +423,19 @@ function updateRemainingWeather() {
   const upcoming = Object.entries(calendar.events).filter(([round]) => Number(round) >= firstPending);
   state.calendar = {...calendar, events: Object.fromEntries([...past, ...upcoming])};
 }
-function upgradeWeatherTurn() {
-  if (state.phase !== 'eventSpread' || state.terrainWeatherVersion === 2) return;
-  // Previously resolved public infections stay on the board. Only unused
-  // placements from the old four-step event need migration.
-  if (eventId() === 'overgrowth') {
-    for (const [source,path] of Object.entries(state.eventFrontier || {})) {
-      state.eventCharges[source] = Math.max(0, 3 - (path.length - 1));
-    }
-  } else {
-    state.eventCharges = {};
-  }
-  state.terrainWeatherVersion = 2;
-  advanceEventSpread();
+function load(){
+ try{
+  const saved=localStorage.getItem('spreadResistanceSaveV25');
+  if(!saved)return;
+  state=JSON.parse(saved);
+  upgradeCoasts();
+  state.weatherLocks??={};state.weatherCleanseTargets??=[];
+  state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];
+  aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]};
+  if(state.phase!=='finished')revealSeedsThrough(state.round-1);
+  persist();
+ }catch(e){state=null}
 }
-function load(){try{const x=localStorage.getItem('spreadResistanceSaveV24');if(x){state=JSON.parse(x);updateRemainingWeather();upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]};upgradeWeatherTurn();state.terrainWeatherVersion=2;persist()}}catch(e){state=null}}
 function neighbors(id){
   const m=Math.floor(id/CELLS_PER_MAP),i=id%CELLS_PER_MAP,[o,r,q]=state.maps[m].coords[i],out=[];
   const local=o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]];
@@ -519,7 +519,7 @@ function chooseCell(id){
 function availableAP(m=state.activeMap){return (state.ap[m]||0)+(state.sharedPool||0)}
 function spend(n){const personal=Math.min(state.ap[state.activeMap]||0,n);state.ap[state.activeMap]-=personal;state.sharedPool=Math.max(0,(state.sharedPool||0)-(n-personal))}
 function guess(){if(selected===null)return;const id=selected,cost=searchCost(id);if(!searchAllowed(id)||availableAP()<cost)return;const idx=state.seeds.findIndex(s=>s.id===id);if(searchFree(id)){state.eventUsedResistance??=[];state.eventUsedResistance.push(id)}spend(cost);if(idx>=0){state.seeds.splice(idx,1);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，找到并清除了隐藏种子。`);state.notice='找到了！种子已清除。'}else{state.aiEmpty??=[];if(!state.aiEmpty.includes(id))state.aiEmpty.push(id);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，当前没有隐藏种子；可把结果告诉队友，避免重复搜索。`);state.notice='当前没有找到种子，可把结果告诉队友。'}selected=null;actionMode='';persist();render()}
-function clearInfection(){if(selected===null||!state.infected.includes(selected))return;const cost=clearCost(selected);if(availableAP()<cost)return;state.infected=state.infected.filter(x=>x!==selected);spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[state.activeMap]++;log(`${labels[state.activeMap]} 花费 ${cost} AP 清除了一个已公开感染。此前已经埋下的种子仍会成熟；清除后该感染不会再产生新种子；下一轮本玩家个人 AP +1。`);selected=null;actionMode='';persist();render()}
+function clearInfection(){if(selected===null||!state.infected.includes(selected)||!clearAllowed(selected))return;const cost=clearCost(selected);if(availableAP()<cost)return;state.infected=state.infected.filter(x=>x!==selected);spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[state.activeMap]++;log(`${labels[state.activeMap]} 花费 ${cost} AP 清除了一个已公开感染。此前已经埋下的种子仍会成熟；清除后该感染不会再产生新种子；下一轮本玩家个人 AP +1。`);selected=null;actionMode='';persist();render()}
 function finishMap(){const m=state.activeMap;if(m<2){handoff(owners[m+1],`resistance-${m+1}`)}else finishResistanceRound()}
 function revealSeedsThrough(round) {
   const remaining = [];
@@ -585,7 +585,7 @@ function aiResistance(){
  const m=state.activeMap;let steps=0;
  while(steps++<CELLS_PER_MAP*2){
   const infected=state.infected.filter(id=>Math.floor(id/CELLS_PER_MAP)===m);
-  const affordable=infected.filter(id=>availableAP(m)>=clearCost(id));
+  const affordable=infected.filter(id=>clearAllowed(id)&&availableAP(m)>=clearCost(id));
   if(affordable.length){
    const target=pickBest(affordable,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);
    const cost=clearCost(target);
@@ -623,8 +623,8 @@ function mapCard(m,viewer){
     const route=isSpread ? linkedExit(id) : null;
     const routeInfo=route ? ` ↔ ${cellLabel(route[0]===id ? route[1] : route[0])}` : '';
     const terrain=map.terrain?.[i]||'plains';
-    const cls=['cell','triangle-cell',orient===0?'tri-down':'tri-up','terrain-'+terrain,status,isExit?'harbor':'',visibleSowingBan(id,isSpread)?'sowing-ban':'',isSpread&&blockedHarbor(id)?'closed-harbor':'',state.phase==='eventSpread'&&eligibleEventSources().includes(id)?'weather-source':'',isSelected?'selected':'',legal?'legal':''].filter(Boolean).join(' ');
-    cells.push(`<button class="${cls}" data-cell-id="${id}" style="left:${(col-minQ)*56+(row-minR)*28+(orient===1?28:0)}px;top:${(row-minR)*48.5}px" ${canClick?'':'disabled'} onclick="window.gameCell(${id})" aria-label="${cellLabel(id)} ${TERRAIN[terrain].name} ${isExit?'出海口':''} ${tiny}${routeInfo}" title="${cellLabel(id)} · ${TERRAIN[terrain].name} ${isExit?'· 出海口':''} ${tiny}${routeInfo}"><span class="terrain-icon">${TERRAIN[terrain].icon}</span>${isSpread&&state.phase==='eventSpread'&&state.eventCharges?.[id]>0?`<span class="weather-count">×${state.eventCharges[id]}</span>`:''}<span class="mark">${isExit?'<i class="asset anchor"></i>':''}${i+1}${status==='normal'?'':`<i class="asset ${status==='seed'?'grain':'spore'}"></i>`}</span></button>`)
+    const cls=['cell','triangle-cell',orient===0?'tri-down':'tri-up','terrain-'+terrain,status,isExit?'harbor':'',visibleSowingBan(id)?'sowing-ban':'',activeWeatherLock('search',id)?'search-blocked':'',activeWeatherLock('clear',id)?'clear-blocked':'',activeWeatherLock('source',id)?'source-blocked':'',blockedHarbor(id)?'closed-harbor':'',state.phase==='eventSpread'&&eligibleEventSources().includes(id)?'weather-source':'',isSelected?'selected':'',legal?'legal':''].filter(Boolean).join(' ');
+    cells.push(`<button class="${cls}" data-cell-id="${id}" style="left:${(col-minQ)*56+(row-minR)*28+(orient===1?28:0)}px;top:${(row-minR)*48.5}px" ${canClick?'':'disabled'} onclick="window.gameCell(${id})" aria-label="${cellLabel(id)} ${TERRAIN[terrain].name} ${isExit?'出海口':''} ${tiny}${routeInfo}" title="${cellLabel(id)} · ${TERRAIN[terrain].name} ${isExit?'· 出海口':''} ${tiny}${routeInfo}${visibleSowingBan(id)?' · 禁止播种':''}${activeWeatherLock('search',id)?' · 禁止搜索':''}${activeWeatherLock('clear',id)?' · 禁止清除':''}"><span class="terrain-icon">${TERRAIN[terrain].icon}</span>${isSpread&&state.phase==='eventSpread'&&state.eventCharges?.[id]>0?`<span class="weather-count">×${state.eventCharges[id]}</span>`:''}<span class="mark">${isExit?'<i class="asset anchor"></i>':''}${i+1}${status==='normal'?'':`<i class="asset ${status==='seed'?'grain':'spore'}"></i>`}</span></button>`)
   }
   const extra=state.phase==='stitch'&&isSpread?`<div class="map-foot">🌿 平原 · ☀ 沙漠 · ❄ 雪地；带⚓的是出海口。点击两个不同地图上的港口，完成一条连接。</div>`:isSpread?`<div class="map-foot">三角格共边即可扩散；绿色虚线格可以放置种子。实际连接的两对出海口对 Resistance 隐藏。</div>`:`<div class="map-foot">你只看到自己的地图。格子编号 1–8；Spread 从 5 个出海口候选中选择连接位置，本图出海口为 ${map.ports.map(i=>i+1).join("、")} 号。</div>`;
   const controls=stitch?`<span class="stitch-help">点击 ⚓ 选择连接</span>`:'';
@@ -636,10 +636,10 @@ function renderSide(){
   const privateView=['resistance','handoff'].includes(state.phase);
   const localInfections=state.phase==='resistance'?state.infected.filter(id=>Math.floor(id/CELLS_PER_MAP)===state.activeMap).length:null;
   const inf=privateView?(localInfections===null?'仅查看自己的地图':`${localInfections}（本地图）`):state.infected.length;
-  const bankPanel=privateView?'':eventSeedQuota()>0?`<div class="event-bank"><strong>✷ 本轮天气</strong><small>${activeEvent().name} · 每个公开感染的对应地形格连续蔓延最多 ${eventSeedQuota()} 格，每步埋一颗隐藏种子</small><small>仅当轮生效，不累计到下一轮。</small></div>`:'';
+  const bankPanel=activeEvent()&&state.weatherRoll?`<div class="event-bank"><strong>✷ 双阵营随机天气</strong><small>Spread ${state.weatherRoll.spread==='positive'?'正面':'负面'} · Resistance ${state.weatherRoll.resistance==='positive'?'正面':'负面'}</small><small>双方独立抽取，本轮地图效果请看天气卡和格子标记。</small></div>`:'';
   const seed=state.seeds.length,track=[0,1,2,3,4].map(i=>`<div class="meter-cell ${state.meter===i?'active':''}">${i===state.meter?'●':i}</div>`).join('');
   const log=state.log.filter(line => !privateView || !line.includes('Spread')).slice(0,10).map(x=>`<div class="log-item">${escapeHtml(x)}</div>`).join('');
-  $('#side').innerHTML=`${calendarCard()}${eventCard()}${state.sowingBan?.length && !activeEvent() ? '<p>平原塌陷持续到本轮结束。斜纹区域不能播种。</p>' : ''}${bankPanel}<h3>局势面板</h3><div class="resources"><span>轮次</span><strong>${state.round}</strong></div><div class="resources"><span>${privateView?'本地图感染':'公开感染'}</span><strong>${inf}${privateView?'':' / 24'}</strong></div><div class="resources"><span>隐藏种子（Spread 可见）</span><strong>${privateView?'?':seed}</strong></div><div class="rulebox"><strong>感染蔓延</strong><br>Spread 每轮最多从两个不同公开感染格各基础扩散一次，再主动放一颗种子。天气效果见本轮事件卡。清除公开感染每次花费 2 AP。感染若在之后被清除，已埋下的种子仍会成熟；若在 Spread 阶段开始前已被清除，则不会埋种。搜索落空会给团队提供搜查信息。清除感染的玩家下一轮个人 AP +1（奖励只持续一轮）。</div><h3 style="margin-top:18px">行动记录</h3><div class="log">${log}</div>`;
+  $('#side').innerHTML=`${calendarCard()}${eventCard()}${Object.keys(state.weatherLocks?.sow||{}).some(id=>activeWeatherLock('sow',id))?'<p>天气封锁区暂时不能播种。</p>':''}${bankPanel}<h3>局势面板</h3><div class="resources"><span>轮次</span><strong>${state.round}</strong></div><div class="resources"><span>${privateView?'本地图感染':'公开感染'}</span><strong>${inf}${privateView?'':' / 24'}</strong></div><div class="resources"><span>隐藏种子（Spread 可见）</span><strong>${privateView?'?':seed}</strong></div><div class="rulebox"><strong>感染蔓延</strong><br>Spread 每轮最多从两个不同公开感染格各基础扩散一次，再主动放一颗种子。天气效果见本轮事件卡。清除公开感染每次花费 2 AP。感染若在之后被清除，已埋下的种子仍会成熟；若在 Spread 阶段开始前已被清除，则不会埋种。搜索落空会给团队提供搜查信息。清除感染的玩家下一轮个人 AP +1（奖励只持续一轮）。</div><h3 style="margin-top:18px">行动记录</h3><div class="log">${log}</div>`;
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function renderStatus(){
@@ -658,7 +658,7 @@ function render(){
     $('#side').textContent = '';
     return;
   }
-    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro"><strong>地形 × 直观天气事件测试版</strong>。每局只有第 3、6、9 轮有天气，其余轮次按普通规则行动；每张地图的八个格子随机拥有平原、沙漠或雪地，出海口与地形重叠。10 轮之内 Spread 必须占满全图，Resistance 只需守住任何空格。<br>基础玩法：从 15 种不同形状及颜色的不同轮廓的地图中抽出三张三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图，随后 Spread 在全图任选两个不同格子放置初始种子（可同图）；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；Spread 每轮最多选择 2 个公开感染自行决定传播位置，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>Spread 在全图任意两个不同格子放初始种子（可同图）；每轮常规主动放置 1 颗种子，额外天气扩散单独从对应感染地形格发动。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 3 次共享行动，不需要预先分配。搜索种子通常用 1 AP，清除公开感染花费 2 AP。每清除 1 个，行动者下一轮个人 AP +1。第 9 轮起，各玩家根据本岛未公开感染格获得最多 +2 AP。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，Spread 每轮最多选择 2 个成熟感染向相邻空格埋下隐藏种子，随后 Resistance 才能搜索或清除。本轮三位 Resistance 都行动完毕后，所有剩余种子公开为感染。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="terrain-legend">🌿 平原　☀ 沙漠　❄ 雪地　⚓ 出海口　🦠 公开感染　🌾 隐藏种子<br>公开感染的对应地形格直接触发蔓延天气；空格和隐藏种子按 Resistance 地形格处理。平原藤蔓和融雪放置隐藏种子，沙暴和热浪产生公开感染。斜纹表示禁播。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Spread 在 10 轮内占满全图获胜；Resistance 清空感染或撑过第 10 轮获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮基础 1 AP，团队共享 3 AP。搜索通常 1 AP；清除感染花费 2 AP。第 9 轮起，每个 Resistance 根据自己地图上未公开感染格数，每 2 格获得 +1 AP，最多 +2 AP。隐藏种子也计入。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
+    const main=$('#main');main.classList.remove('stitch-main');if(!state){main.innerHTML=`<div class="eyebrow">可直接在浏览器运行 · 单设备轮流操作</div><h2>Spread 把种子埋进地图，Resistance 找出并清除它们。</h2><p class="intro"><strong>地形 × 双阵营随机天气测试版</strong>。每局第 3、6、9 轮发生地形天气，Spread 与 Resistance 在事件发生时各自独立随机正负效果；每张地图的八个格子随机拥有平原、沙漠或雪地，出海口与地形重叠。10 轮之内 Spread 必须占满全图，Resistance 只需守住任何空格。<br>基础玩法：从 15 种不同形状及颜色的不同轮廓的地图中抽出三张三角地图，每张由 8 个共边相接的编号区域组成，并有 5 个出海口候选。Spread 先点击配对出海口拼图，随后 Spread 在全图任选两个不同格子放置初始种子（可同图）；Resistance 只看自己的地图，不知道拼接方式。种子在抵抗者行动结束后公开成感染；Spread 每轮最多选择 2 个公开感染自行决定传播位置，再由 Resistance 应对。共边相接的三角格最多沿三条共边传播。</p><div class="howto"><div class="how"><b>① Spread 拼地图</b><span>三角区域只有共边才相邻，沿三条边传播。点击两个不同地图的出海口完成一条连接；再选一对港口把三张地图连起来。</span></div><div class="how"><b>② Spread 放种子</b><span>Spread 在全图任意两个不同格子放初始种子（可同图）；每轮常规主动放置 1 颗种子，额外天气扩散单独从对应感染地形格发动。</span></div><div class="how"><b>③ Resistance 应对</b><span>每位 Resistance 每轮有 1 次行动，团队另有 3 次共享行动，不需要预先分配。搜索种子通常用 1 AP，清除公开感染花费 2 AP。每清除 1 个，行动者下一轮个人 AP +1。第 9 轮起，各玩家根据本岛未公开感染格获得最多 +2 AP。搜查结果可以自由告诉队友，交流不消耗行动。</span></div><div class="how"><b>④ 爆发蔓延</b><span>Spread 阶段开始时，Spread 每轮最多选择 2 个成熟感染向相邻空格埋下隐藏种子，随后 Resistance 才能搜索或清除。本轮三位 Resistance 都行动完毕后，所有剩余种子公开为感染。</span></div></div><div class="notice">可在屏幕上方分别选择人类或 AI 席位。单设备轮流操作时会提示交接；Resistance 看不到 Spread 的种子和出海口拼接方式。</div><div class="terrain-legend">🌿 平原　☀ 沙漠　❄ 雪地　⚓ 出海口　🦠 公开感染　🌾 隐藏种子<br>日历提前显示天气轮次和对应地形，发生时双方各随机正面或负面效果。公开感染格属于 Spread；空格和隐藏种子格属于 Resistance。地图显示封锁状态，不需要计算储备。</div><div class="actionrow"><button onclick="window.newGame()">开始新游戏</button></div><p class="footer-note">胜负：Spread 在 10 轮内占满全图获胜；Resistance 清空感染或撑过第 10 轮获胜。</p>`;$('#side').innerHTML=`<h3>原型规则</h3><div class="rulebox"><strong>Resistance 行动</strong><br>每人每轮基础 1 AP，团队共享 3 AP。搜索通常 1 AP；清除感染花费 2 AP。第 9 轮起，每个 Resistance 根据自己地图上未公开感染格数，每 2 格获得 +1 AP，最多 +2 AP。隐藏种子也计入。</div><div class="rulebox"><strong>地图拼接</strong><br>每张地图由 8 个共边相接的三角区域组成，Spread 从 5 个标记出海口中连接两组不同地图。</div><div class="rulebox"><strong>自动保存</strong><br>游戏进度保存在当前浏览器，刷新页面后可以继续。</div>`;return}
   if(state.phase==='finished'){
     const spread=state.winner==='Spread',opening=!!state.openingElimination;main.innerHTML=`<div class="winner ${spread?'spread':''}"><div class="emoji">${opening?'⚪':spread?'🦠':'🛡️'}</div><div class="eyebrow">${opening?'统计外对局 · 第一轮':'游戏结束'}</div><h2>${opening?'开局淘汰':spread?'Spread 获胜':'Resistance 获胜'}</h2><p>${escapeHtml(state.winReason)}。第 ${state.round} 轮结束，共有 ${state.infected.length} 个公开感染和 ${state.seeds.length} 个隐藏种子。${opening?'本局不计入 Spread 或 Resistance 的胜率。':''}</p><button onclick="window.newGame()">再开一局</button></div><div class="actionrow"><button class="secondary" onclick="window.toggleFinalBoard()">查看 Spread 全图</button></div><div id="finalBoard"></div>`;renderSide();return
   }
@@ -673,8 +673,8 @@ function render(){
     main.innerHTML=`<div class="eyebrow">Spread · 初始放置</div><h2>放置两个初始隐藏种子</h2><p class="intro">在全图任选两个不同的空格放种子（可位于同一张地图）。Resistance 不会看到种子位置，也不知道拼接方式。</p><div class="actionrow"><span class="selection">${selected===null?'尚未选择位置':`已选择 ${cellLabel(selected)}`}</span><button class="gold" onclick="window.placeInitial()" ${selected===null?'disabled':''}>放置初始种子</button></div>${renderMaps('spread')}`;renderSide();return
   }
   if(state.phase==='eventSpread'){
-    const source=currentEventSource(),sources=eligibleEventSources(),choices=currentEventChoices();
-    main.innerHTML=`<div class="eyebrow">Spread · 天气事件</div><h2>${activeEvent().name} · 从地形感染格扩散</h2>${eventCard()}<p class="intro">每个公开感染的对应地形格沿相邻格连续蔓延，最多经过 ${eventSeedQuota()} 格。先点击带 × 数字的感染源，再点绿色空格。每次只能从这条藤蔓的末端继续。种子保持隐藏，可在 Resistance 行动时搜出；没有合法邻格时停止。</p><div class="selection">${source===null?'请选择带 × 标记的感染源':`当前来源 ${cellLabel(source)} · 剩余 ${state.eventCharges[source]} 次 · 可放 ${choices.map(cellLabel).join('、')}`}</div><div class="actionrow"><button class="secondary" onclick="window.skipEventSpread()">跳过天气扩散</button><span class="selection">可选来源 ${sources.length} 格</span></div>${renderMaps('spread')}`;renderSide();return
+    const source=currentEventSource(),sources=eligibleEventSources(),choices=currentEventChoices(),kind=weatherEffect('spread')?.kind;
+    main.innerHTML=`<div class="eyebrow">Spread · 天气事件</div><h2>${activeEvent().name} · 从地形感染格扩散</h2>${eventCard()}<p class="intro">每个对应地形的感染源额外播种最多 ${eventSeedQuota()} 颗。${kind==='fan'?'从沙漠感染源向不同的直接邻格播种。':'从当前路径的末端连续向外播种，不走回头路、不跳格。'}点击带 × 的感染源，再点绿色空格，数字自动减少；种子保持隐藏。</p><div class="selection">${source===null?'请选择带 × 标记的感染源':`当前来源 ${cellLabel(source)} · 剩余 ${state.eventCharges[source]} 次 · 可放 ${choices.map(cellLabel).join('、')}`}</div><div class="actionrow"><button class="secondary" onclick="window.skipEventSpread()">跳过天气扩散</button><span class="selection">可选来源 ${sources.length} 格</span></div>${renderMaps('spread')}`;renderSide();return
   }
   if(state.phase==='autoSpread'){
     const source=currentAutoSource(),options=currentAutoChoices(),sources=availableAutoSources();
@@ -686,7 +686,7 @@ function render(){
   if(state.phase==='resistance'){
     const m=state.activeMap,sel=selected,selInfected=sel!==null&&state.infected.includes(sel),modeLabel=actionMode==='guess'?'搜索种子':actionMode==='clear'?'清除感染':'选择行动';
     const ap=availableAP(m);let msg=state.notice?`<div class="notice ${state.notice.includes('没有')?'warn':''}">${escapeHtml(state.notice)}</div>`:'';state.notice='';
-    main.innerHTML=`<div class="eyebrow">${escapeHtml(owners[m])} · ${escapeHtml(labels[m])}</div><h2>查看你的地图并选择行动</h2>${eventCard()}<p class="intro">先点本图的编号格，再选择搜索或清除。锚形标记是可通往其他地图的候选出海口。</p>${msg}<div class="actionrow"><span class="pill">个人行动：<strong>${state.ap[m]}</strong>　共享行动：<strong>${state.sharedPool}</strong></span>${state.round>=RESISTANCE_MOBILIZE_AT?`<span class="pill">紧急动员：<strong>本地图 +${mobilizationBonus(m)} AP</strong></span>`:''}<span class="pill">选择：<strong>${sel===null?'无':cellLabel(sel)}</strong></span></div><div class="modebar"><button class="gold" onclick="window.guessSeed()" ${sel===null||selInfected||!searchAllowed(sel)||ap<searchCost(sel)?'disabled':''}>搜索所选格 · ${sel===null?'1':searchCost(sel)} 点</button><button class="danger" onclick="window.clearInfection()" ${!selInfected||ap<clearCost(sel)?'disabled':''}>清除所选感染 · ${sel===null?'2':clearCost(sel)} 点</button></div><div class="action-help">搜索通常花费 1 AP，清除公开感染固定花费 2 AP；第 9 轮起，每位 Resistance 根据自己地图尚未公开感染的格子获得最多 2 个额外个人 AP。隐藏种子按 Resistance 格计算。搜查结果可以口头分享；已埋下的种子会独立成熟，即使来源感染被清除也不受影响。</div>${renderMaps('resistance')}<div class="actionrow"><button class="secondary" onclick="window.finishMap()">结束 ${owners[m]} 行动</button></div>`;renderSide();return
+    main.innerHTML=`<div class="eyebrow">${escapeHtml(owners[m])} · ${escapeHtml(labels[m])}</div><h2>查看你的地图并选择行动</h2>${eventCard()}<p class="intro">先点本图的编号格，再选择搜索或清除。锚形标记是可通往其他地图的候选出海口。</p>${msg}<div class="actionrow"><span class="pill">个人行动：<strong>${state.ap[m]}</strong>　共享行动：<strong>${state.sharedPool}</strong></span>${state.round>=RESISTANCE_MOBILIZE_AT?`<span class="pill">紧急动员：<strong>本地图 +${mobilizationBonus(m)} AP</strong></span>`:''}<span class="pill">选择：<strong>${sel===null?'无':cellLabel(sel)}</strong></span></div><div class="modebar"><button class="gold" onclick="window.guessSeed()" ${sel===null||selInfected||!searchAllowed(sel)||ap<searchCost(sel)?'disabled':''}>搜索所选格 · ${sel===null?'1':searchCost(sel)} 点</button><button class="danger" onclick="window.clearInfection()" ${!selInfected||!clearAllowed(sel)||ap<clearCost(sel)?'disabled':''}>清除所选感染 · ${sel===null?'2':clearCost(sel)} 点</button></div><div class="action-help">搜索通常花费 1 AP，清除公开感染固定花费 2 AP；第 9 轮起，每位 Resistance 根据自己地图尚未公开感染的格子获得最多 2 个额外个人 AP。隐藏种子按 Resistance 格计算。搜查结果可以口头分享；已埋下的种子会独立成熟，即使来源感染被清除也不受影响。</div>${renderMaps('resistance')}<div class="actionrow"><button class="secondary" onclick="window.finishMap()">结束 ${owners[m]} 行动</button></div>`;renderSide();return
   }
 }
 window.setAISeat=(seat,on)=>{if(seat==='spread')aiSetup.spread=on;else{const i=Number(seat.slice(1));aiSetup.resistance[i]=on}if(state){state.ai={spread:aiSetup.spread,resistance:[...aiSetup.resistance]};persist();render()}else renderStatus()};
@@ -716,7 +716,7 @@ $('#newGameBtn').onclick=window.newGame;
 const lessons = [
   ['选择席位','1 位 Spread 对抗 3 位 Resistance。每个席位都能交给 AI。你可以先当 Spread，观察种子如何沿着路线扩散。'],
   ['连接港口','锚形标记只会出现在有外露边的三角格上。点 A 图一个港口，再点 B 图一个港口。用剩下的港口把 C 图也连进来，再点「完成拼接」。'],
-  ['埋下种子','新局第 3、6、9 轮触发天气，平原藤蔓沿一条路径最多埋三颗隐藏种子；平原暴雨禁播一轮，塌陷禁播两轮，第 9 轮救援清理触发岛及直接相连的岛。开局由 Spread 在全图任意两个不同格子自由放种子，可放同一张地图。之后每次 Spread 行动，先由 Spread 最多选择 2 个成熟感染向相邻格扩散，再由你沿共边或已连接的港口放 1 颗。每轮只可主动放 1 颗。'],
+  ['埋下种子','Spread 开局放两颗种子。日历提前告诉玩家什么时候会影响哪种地形，正负效果在事件发生时分别随机抽取。Spread 正面可能沿路径或从源格播种，负面会封锁传播；Resistance 也同时获得一张正面或负面效果。之后仍然有最多两次基础扩散和一次主动播种。'],
   ['搜查自己的地图','叶形是隐藏种子，只有 Spread 看得见。星芒是公开感染。Resistance 选一个格子，花 1 点搜索种子，或花 2 点清除公开感染。每人基础 1 点个人行动，另有团队共用的 3 点。'],
   ['沟通与胜负','可以在语音中报出地图字母、格号和搜索结果，交流免费。本轮三位 Resistance 都行动完毕后，手动和自动种子一起结算，未清除的全部公开为感染。24 格全部有种子或感染时 Spread 胜，全部清空或撑到第 10 轮结束 Resistance 胜。']
 ];

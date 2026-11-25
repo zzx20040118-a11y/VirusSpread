@@ -285,11 +285,11 @@ function upgradeCoasts() {
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
   const calendar=CALENDARS[rand(CALENDARS.length)];
-  state={calendar,eventId:'',eventFreeUsed:0,coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
+  state={calendar,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
-function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV15',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV15')}catch(e){}}
-function load(){try{const x=localStorage.getItem('spreadResistanceSaveV15');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
+function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV16',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV16')}catch(e){}}
+function load(){try{const x=localStorage.getItem('spreadResistanceSaveV16');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
 function neighbors(id){
   const m=Math.floor(id/CELLS_PER_MAP),i=id%CELLS_PER_MAP,[o,r,q]=state.maps[m].coords[i],out=[];
   const local=o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]];
@@ -300,7 +300,7 @@ function neighbors(id){
 function occupied(id){return state.infected.includes(id)||state.seeds.some(s=>s.id===id)}
 function fullCoverage(){return state.infected.length+state.seeds.length>=CELLS_PER_MAP*3}
 function infectedSources(){return [...state.infected].sort((a,b)=>a-b)}
-function legalSeedCells(){const s=new Set(),sources=new Set([...infectedSources(),...state.seeds.map(seed=>seed.id)]);for(const id of sources)for(const n of spreadNeighbors(id))if(!occupied(n))s.add(n);return [...s]}
+function legalSeedCells(){const s=new Set(),sources=new Set([...infectedSources(),...state.seeds.map(seed=>seed.id)]);for(const id of sources){if(state.infected.includes(id)&&!canSourceSpread(id))continue;for(const n of spreadNeighbors(id))if(!occupied(n))s.add(n)}return [...s]}
 function linkedExit(id){for(const [a,b] of state.links)if(a===id||b===id)return [a,b];return null}
 function addSeed(seed){state.seeds.push(seed)}
 function availableAutoSources(){
@@ -379,8 +379,8 @@ function chooseCell(id){
 }
 function availableAP(m=state.activeMap){return (state.ap[m]||0)+(state.sharedPool||0)}
 function spend(n){const personal=Math.min(state.ap[state.activeMap]||0,n);state.ap[state.activeMap]-=personal;state.sharedPool=Math.max(0,(state.sharedPool||0)-(n-personal))}
-function guess(){if(selected===null)return;const id=selected,cost=searchCost(id);if(!searchAllowed(id)||availableAP()<cost)return;const idx=state.seeds.findIndex(s=>s.id===id);spend(cost);if(idx>=0){state.seeds.splice(idx,1);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，找到并清除了隐藏种子。`);state.notice='找到了！种子已清除。'}else{state.aiEmpty??=[];if(!state.aiEmpty.includes(id))state.aiEmpty.push(id);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，当前没有隐藏种子；可把结果告诉队友，避免重复搜索。`);state.notice='当前没有找到种子，可把结果告诉队友。'}selected=null;actionMode='';persist();render()}
-function clearInfection(){if(selected===null||!state.infected.includes(selected))return;const cost=clearCost(selected);if(availableAP()<cost)return;if(cost===0)state.eventFreeUsed++;state.infected=state.infected.filter(x=>x!==selected);spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[state.activeMap]++;log(`${labels[state.activeMap]} 花费 2 次行动清除了一个已公开感染。此前已经埋下的种子仍会成熟；清除后该感染不会再产生新种子；下一轮本玩家个人 AP +1。`);selected=null;actionMode='';persist();render()}
+function guess(){if(selected===null)return;const id=selected,cost=searchCost(id);if(!searchAllowed(id)||availableAP()<cost)return;const idx=state.seeds.findIndex(s=>s.id===id);if(searchFree(id)){state.eventUsedResistance??=[];state.eventUsedResistance.push(id)}spend(cost);if(idx>=0){state.seeds.splice(idx,1);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，找到并清除了隐藏种子。`);state.notice='找到了！种子已清除。'}else{state.aiEmpty??=[];if(!state.aiEmpty.includes(id))state.aiEmpty.push(id);log(`${labels[state.activeMap]} 搜索 ${cellLabel(id)}，当前没有隐藏种子；可把结果告诉队友，避免重复搜索。`);state.notice='当前没有找到种子，可把结果告诉队友。'}selected=null;actionMode='';persist();render()}
+function clearInfection(){if(selected===null||!state.infected.includes(selected))return;const cost=clearCost(selected);if(availableAP()<cost)return;state.infected=state.infected.filter(x=>x!==selected);spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[state.activeMap]++;log(`${labels[state.activeMap]} 花费 ${cost} AP 清除了一个已公开感染。此前已经埋下的种子仍会成熟；清除后该感染不会再产生新种子；下一轮本玩家个人 AP +1。`);selected=null;actionMode='';persist();render()}
 function finishMap(){const m=state.activeMap;if(m<2){handoff(owners[m+1],`resistance-${m+1}`)}else finishResistanceRound()}
 function revealSeedsThrough(round) {
   const remaining = [];
@@ -449,7 +449,7 @@ function aiResistance(){
   if(affordable.length){
    const target=pickBest(affordable,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);
    const cost=clearCost(target);
-   if(cost===0)state.eventFreeUsed++;
+   
    state.infected=state.infected.filter(id=>id!==target);
    spend(cost);state.nextApBonus??=[0,0,0];state.nextApBonus[m]++;
    log(owners[m]+' AI 花费 '+cost+' AP 清除了 '+cellLabel(target)+'。');
@@ -532,7 +532,7 @@ function render(){
   }
   if(state.phase==='autoSpread'){
     const source=currentAutoSource(),options=currentAutoChoices(),sources=availableAutoSources();
-    main.innerHTML=`<div class="eyebrow">Spread · 第 ${state.round} 轮 · 感染扩散</div><h2>选择感染源与相邻格进行扩散</h2>${eventCard()}<p class="intro">基础扩散 <strong>${state.autoCount||0} / 2</strong> 次，事件额外扩散 <strong>${state.autoExtraCount||0} / ${eventBonusLimit()}</strong> 次。先点击成熟感染，再点击相邻绿色空格。每个感染源可使用基础扩散一次，并在符合事件地形时使用事件额外扩散一次。之后仍可主动放 1 颗种子。</p><div class="selection">${source===null?'请点击一个成熟感染选择扩散来源':`当前来源：${cellLabel(source)}；可选目标：${options.map(cellLabel).join('、')}`}</div><div class="actionrow"><button class="secondary" onclick="window.finishAutoSpread()">跳过剩余扩散</button><span class="selection">可选感染源：${sources.length}</span></div>${renderMaps('spread')}`;renderSide();return
+    main.innerHTML=`<div class="eyebrow">Spread · 第 ${state.round} 轮 · 感染扩散</div><h2>选择感染源与相邻格进行扩散</h2>${eventCard()}<p class="intro">基础扩散 <strong>${state.autoCount||0} / 2</strong> 次，逐格事件扩散 <strong>${state.autoExtraCount||0} / ${eventBonusLimit()}</strong> 次。先点击成熟感染，再点击相邻绿色空格。基础扩散最多 2 次；只有事件触发时已公开感染的对应地形格，各额外获得 1 次扩散。没有对应的公开感染，就没有该事件扩散奖励。</p><div class="selection">${source===null?'请点击一个成熟感染选择扩散来源':`当前来源：${cellLabel(source)}；可选目标：${options.map(cellLabel).join('、')}`}</div><div class="actionrow"><button class="secondary" onclick="window.finishAutoSpread()">跳过剩余扩散</button><span class="selection">可选感染源：${sources.length}</span></div>${renderMaps('spread')}`;renderSide();return
   }
   if(state.phase==='spread'){
     const legal=legalSeedCells(),notice=state.notice?`<div class="notice warn">${escapeHtml(state.notice)}</div>`:'';main.innerHTML=`<div class="eyebrow">Spread · 第 ${state.round} 轮</div><h2>选择扩散路线</h2>${eventCard()}<p class="intro">每轮固定主动放置 1 个隐藏种子。每个种子可从公开感染或任意隐藏种子继续向相邻空格铺开，由 Spread 决定扩散方向。三角格共边或配对出海口相连才算相邻。绿色虚线格均可选择。</p>${notice}<div class="actionrow"><button class="secondary" onclick="window.endSpread()">结束 Spread 行动</button>${legal.length?'<span class="selection">点击绿色区域，自己决定扩散路线</span>':'<span class="selection">没有合法相邻空位</span>'}</div>${renderMaps('spread')}`;renderSide();return
@@ -540,7 +540,7 @@ function render(){
   if(state.phase==='resistance'){
     const m=state.activeMap,sel=selected,selInfected=sel!==null&&state.infected.includes(sel),modeLabel=actionMode==='guess'?'搜索种子':actionMode==='clear'?'清除感染':'选择行动';
     const ap=availableAP(m);let msg=state.notice?`<div class="notice ${state.notice.includes('没有')?'warn':''}">${escapeHtml(state.notice)}</div>`:'';state.notice='';
-    main.innerHTML=`<div class="eyebrow">${escapeHtml(owners[m])} · ${escapeHtml(labels[m])}</div><h2>查看你的地图并选择行动</h2>${eventCard()}<p class="intro">先点本图的编号格，再选择搜索或清除。锚形标记是可通往其他地图的候选出海口。</p>${msg}<div class="actionrow"><span class="pill">个人行动：<strong>${state.ap[m]}</strong>　共享行动：<strong>${state.sharedPool}</strong></span><span class="pill">选择：<strong>${sel===null?'无':cellLabel(sel)}</strong></span></div><div class="modebar"><button class="gold" onclick="window.guessSeed()" ${sel===null||selInfected||!searchAllowed(sel)||ap<searchCost(sel)?'disabled':''}>搜索所选格 · ${sel===null?'1':searchCost(sel)} 点</button><button class="danger" onclick="window.clearInfection()" ${!selInfected||ap<clearCost(sel)?'disabled':''}>清除所选感染 · ${sel===null?'2':clearCost(sel)} 点</button></div><div class="action-help">通常搜索种子花费 1 AP、清除公开感染花费 2 AP；天气可能改变费用或限制操作。搜查结果可以口头分享；已埋下的种子会独立成熟，即使来源感染被清除也不受影响。</div>${renderMaps('resistance')}<div class="actionrow"><button class="secondary" onclick="window.finishMap()">结束 ${owners[m]} 行动</button></div>`;renderSide();return
+    main.innerHTML=`<div class="eyebrow">${escapeHtml(owners[m])} · ${escapeHtml(labels[m])}</div><h2>查看你的地图并选择行动</h2>${eventCard()}<p class="intro">先点本图的编号格，再选择搜索或清除。锚形标记是可通往其他地图的候选出海口。</p>${msg}<div class="actionrow"><span class="pill">个人行动：<strong>${state.ap[m]}</strong>　共享行动：<strong>${state.sharedPool}</strong></span><span class="pill">选择：<strong>${sel===null?'无':cellLabel(sel)}</strong></span></div><div class="modebar"><button class="gold" onclick="window.guessSeed()" ${sel===null||selInfected||!searchAllowed(sel)||ap<searchCost(sel)?'disabled':''}>搜索所选格 · ${sel===null?'1':searchCost(sel)} 点</button><button class="danger" onclick="window.clearInfection()" ${!selInfected||ap<clearCost(sel)?'disabled':''}>清除所选感染 · ${sel===null?'2':clearCost(sel)} 点</button></div><div class="action-help">通常搜索种子花费 1 AP、清除公开感染花费 2 AP；事件以触发时的逐格归属判定，隐藏种子也算 Resistance。搜查结果可以口头分享；已埋下的种子会独立成熟，即使来源感染被清除也不受影响。</div>${renderMaps('resistance')}<div class="actionrow"><button class="secondary" onclick="window.finishMap()">结束 ${owners[m]} 行动</button></div>`;renderSide();return
   }
 }
 window.setAISeat=(seat,on)=>{if(seat==='spread')aiSetup.spread=on;else{const i=Number(seat.slice(1));aiSetup.resistance[i]=on}if(state){state.ai={spread:aiSetup.spread,resistance:[...aiSetup.resistance]};persist();render()}else renderStatus()};

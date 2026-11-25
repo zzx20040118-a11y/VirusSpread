@@ -236,7 +236,6 @@ function chooseEventSpread(id){
  addSeed({id,sourceId:src,planted:state.round,matureAfter:state.round});
  state.eventCharges[src]--;state.eventFrontier[src].push(id);
  log('Spread 天气传播：'+cellLabel(src)+' → '+cellLabel(id));
- if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
  if(!eligibleEventSources().includes(src))selected=null;
  advanceEventSpread();
 }
@@ -248,6 +247,7 @@ function finishEventSpread(){
   log('天气净化完成；公开感染区已更新。');
  }
  if(!state.infected.length&&!state.seeds.length){endGame('Resistance','天气清除了全部种子与感染');return}
+ if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
  beginAutoSpread();
 }
 function runCalendarEvent(){

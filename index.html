@@ -121,24 +121,24 @@ const $=s=>document.querySelector(s), labels=['地图 A','地图 B','地图 C'],
 const CELLS_PER_MAP=8;
 
 const MAX_ROUNDS=10;
-const RESISTANCE_MOBILIZE_AT=4, RESISTANCE_CHEAP_CLEAR_AT=6, MAX_MOBILIZATION_AP=2;
+const RESISTANCE_MOBILIZE_AT=9, RESISTANCE_CHEAP_CLEAR_AT=5, MAX_MOBILIZATION_AP=2;
 const TERRAIN={plains:{name:'平原',icon:'🌿'},desert:{name:'沙漠',icon:'☀'},snow:{name:'雪地',icon:'❄'}};
 const EVENTS={
- overgrowth:{name:'植被疯长',terrain:'plains',side:'Mixed',effect:'🌿 每个公开感染的平原格，从自己这里额外扩散 1 颗种子；其他平原格可免费搜索一次',seedsPerSource:1},
- rain:{name:'暴雨',terrain:'plains',side:'Resistance',effect:'🌧 公开感染的平原格本轮不能基础扩散；其他平原格可免费搜索一次'},
- sinkhole:{name:'地面塌陷',terrain:'plains',side:'Mixed',effect:'🪨 公开感染的平原出海口停止跨岛传播；其他平原格不能被新种子占据'},
- sandstorm:{name:'沙尘暴',terrain:'desert',side:'Spread',effect:'🌪 每个公开感染的沙漠格，从自己这里额外扩散最多 3 颗种子；其他沙漠格本轮不能搜索',seedsPerSource:3},
- drought:{name:'极端干旱',terrain:'desert',side:'Resistance',effect:'☀ 公开感染的沙漠格不能基础扩散；其他沙漠格不能被新种子占据'},
- heatwave:{name:'热浪',terrain:'desert',side:'Mixed',effect:'🔥 每个公开感染的沙漠格，从自己这里额外扩散最多 2 颗种子；其他沙漠格可免费搜索一次',seedsPerSource:2},
- blizzard:{name:'暴风雪',terrain:'snow',side:'Resistance',effect:'🌨 公开感染的雪地格不能基础扩散；其他雪地格可免费搜索一次'},
- thaw:{name:'融雪',terrain:'snow',side:'Spread',effect:'💧 每个公开感染的雪地格，从自己这里额外扩散最多 2 颗种子；其他雪地格可免费搜索一次',seedsPerSource:2},
- freeze:{name:'冰封',terrain:'snow',side:'Mixed',effect:'🧊 公开感染的雪地出海口停止跨岛传播；其他雪地格不能被新种子占据'}
+ overgrowth:{name:'植被疯长',terrain:'plains',side:'Mixed',effect:'🌿 每个公开感染平原格从自身发起一条连续生长的藤蔓，最多播 7 颗种子；其他平原格可免费搜索一次',seedsPerSource:7},
+ rain:{name:'暴雨',terrain:'plains',side:'Resistance',effect:'🌧 公开感染的平原格不能基础扩散；其他平原格清除自己和相邻格的种子及感染',purge:true},
+ sinkhole:{name:'地面塌陷',terrain:'plains',side:'Resistance',effect:'🪨 公开感染的平原出海口封闭；其他平原格无法接收种子，并清除自己和周围的感染',purge:true},
+ sandstorm:{name:'沙尘暴',terrain:'desert',side:'Mixed',effect:'🌪 每个公开感染沙漠格从自身发起沙暴，沿相邻格连续播 5 颗种子；其他沙漠格不能搜索',seedsPerSource:5},
+ drought:{name:'极端干旱',terrain:'desert',side:'Resistance',effect:'☀ 公开感染的沙漠格不能基础扩散；其他沙漠格无法接收种子，并清除自己和相邻格的感染',purge:true},
+ heatwave:{name:'热浪',terrain:'desert',side:'Mixed',effect:'🔥 每个公开感染沙漠格沿热浪连续传播最多 8 颗种子；其他沙漠格可免费搜索一次',seedsPerSource:8},
+ blizzard:{name:'暴风雪',terrain:'snow',side:'Resistance',effect:'🌨 公开感染的雪地格不能基础扩散；其他雪地格清除自己和相邻格的感染与种子',purge:true},
+ thaw:{name:'融雪',terrain:'snow',side:'Mixed',effect:'💧 每个公开感染雪地格沿雪水连续传播最多 7 颗种子；其他雪地格可免费搜索一次',seedsPerSource:7},
+ freeze:{name:'冰封',terrain:'snow',side:'Resistance',effect:'🧊 公开感染的雪地出海口关闭；其他雪地格无法接收种子，并清除自己和相邻格的感染',purge:true}
 };
 const CALENDARS=[
- {name:'A · 早期爆发',events:{3:'rain',4:'overgrowth',6:'sandstorm'}},
- {name:'B · 中期逆转',events:{3:'rain',4:'heatwave',5:'thaw',6:'drought'}},
- {name:'C · 后期决战',events:{3:'sinkhole',5:'heatwave',8:'freeze'}},
- {name:'D · 连续冲击',events:{2:'blizzard',5:'sandstorm',6:'overgrowth',8:'drought'}}
+ {name:'A · 风暴交替',events:{2:'sandstorm',3:'overgrowth',4:'heatwave',5:'thaw',6:'sandstorm',7:'overgrowth',8:'blizzard',9:'rain'}},
+ {name:'B · 热浪与暴雨',events:{2:'overgrowth',3:'heatwave',4:'thaw',5:'sandstorm',6:'overgrowth',7:'sandstorm',8:'rain',9:'drought'}},
+ {name:'C · 干旱与冰封',events:{2:'heatwave',3:'thaw',4:'sandstorm',5:'overgrowth',6:'sandstorm',7:'overgrowth',8:'drought',9:'freeze'}},
+ {name:'D · 融雪与塌陷',events:{2:'thaw',3:'sandstorm',4:'overgrowth',5:'sandstorm',6:'overgrowth',7:'heatwave',8:'freeze',9:'sinkhole'}}
 ];
 
 function terrainOf(id){return state.maps[Math.floor(id/CELLS_PER_MAP)].terrain[id%CELLS_PER_MAP]}
@@ -154,15 +154,27 @@ function spreadNeighbors(id){
 function canSourceSpread(id){return !(eventSide(id,'spread')&&['rain','drought','blizzard'].includes(eventId()))}
 function eventSeedQuota(){return activeEvent()?.seedsPerSource||0}
 function prepareEventSeeds(){
- const count=eventSeedQuota(),src=state.eventOwnership?.spread||[];
- state.eventCharges={};
- if(count)for(const id of src)state.eventCharges[id]=count;
+ state.eventCharges={};state.eventFrontier={};
+ const quota=eventSeedQuota();
+ if(!quota)return;
+ for(const id of state.eventOwnership.spread){
+   state.eventCharges[id]=quota;
+   state.eventFrontier[id]=[id];
+ }
+}
+function eventFrontierChoices(id){
+ const targets=new Set();
+ for(const source of (state.eventFrontier?.[id]||[id]))
+   for(const neighbor of spreadNeighbors(source))
+     if(!occupied(neighbor))targets.add(neighbor);
+ return [...targets];
 }
 function eligibleEventSources(){
- return Object.keys(state.eventCharges||{}).map(Number).filter(id=>state.infected.includes(id)&&state.eventCharges[id]>0&&spreadNeighbors(id).some(n=>!occupied(n)));
+ return Object.keys(state.eventCharges||{}).map(Number).filter(id=>
+   state.infected.includes(id)&&state.eventCharges[id]>0&&eventFrontierChoices(id).length>0);
 }
 function currentEventSource(){return selected!==null&&eligibleEventSources().includes(selected)?selected:null}
-function currentEventChoices(){const id=currentEventSource();return id===null?[]:spreadNeighbors(id).filter(n=>!occupied(n))}
+function currentEventChoices(){const id=currentEventSource();return id===null?[]:eventFrontierChoices(id)}
 function beginEventSpread(){
  state.phase='eventSpread';selected=null;
  advanceEventSpread();
@@ -178,7 +190,7 @@ function chooseEventSpread(id){
  const src=currentEventSource();
  if(src===null||!currentEventChoices().includes(id))return;
  addSeed({id,sourceId:src,planted:state.round,matureAfter:state.round});
- state.eventCharges[src]--;
+ state.eventCharges[src]--;state.eventFrontier[src].push(id);
  log(EVENTS[eventId()].name+'：'+cellLabel(src)+' → '+cellLabel(id)+'（此格还能扩散 '+state.eventCharges[src]+' 次）');
  if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
  if(!eligibleEventSources().includes(src))selected=null;
@@ -197,6 +209,20 @@ function runCalendarEvent(){
    state.eventOwnership[state.infected.includes(id)?'spread':'resistance'].push(id);
  }
  log('日历事件：'+e.name+'（公开感染格 '+state.eventOwnership.spread.length+'，其他地形格 '+state.eventOwnership.resistance.length+'）。');
+ if(e.purge){
+   // One recovery effect per Resistance-owned terrain tile.
+   // No hidden seed locations are revealed to the Resistance UI or logs.
+   const washed=new Set();
+   for(const id of state.eventOwnership.resistance)
+     for(const target of [id,...neighbors(id)])
+       if(state.infected.includes(target)||state.seeds.some(seed=>seed.id===target))
+         washed.add(target);
+   if(washed.size){
+     state.infected=state.infected.filter(id=>!washed.has(id));
+     state.seeds=state.seeds.filter(seed=>!washed.has(seed.id));
+     log(e.name+'：相邻的受感染区域已经被清理。');
+   }
+ }
 }
 function searchFree(id){return ['rain','blizzard','overgrowth','heatwave','thaw'].includes(eventId())&&eventSide(id,'resistance')&&!(state.eventUsedResistance||[]).includes(id)}
 function searchCost(id){return searchFree(id)?0:1}
@@ -321,11 +347,11 @@ function upgradeCoasts() {
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
   const calendar=CALENDARS[rand(CALENDARS.length)];
-  state={calendar,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
+  state={calendar,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
-function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV22',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV22')}catch(e){}}
-function load(){try{const x=localStorage.getItem('spreadResistanceSaveV22');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
+function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV23',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV23')}catch(e){}}
+function load(){try{const x=localStorage.getItem('spreadResistanceSaveV23');if(x){state=JSON.parse(x);upgradeCoasts();if(state.phase!=="finished"){revealSeedsThrough(state.round-1);persist()}state.ai??={spread:false,resistance:[false,false,false]};state.aiEmpty??=[];aiSetup={spread:!!state.ai.spread,resistance:[...state.ai.resistance]}}}catch(e){state=null}}
 function neighbors(id){
   const m=Math.floor(id/CELLS_PER_MAP),i=id%CELLS_PER_MAP,[o,r,q]=state.maps[m].coords[i],out=[];
   const local=o===0?[[1,r,q],[1,r,q-1],[1,r-1,q]]:[[0,r,q],[0,r+1,q],[0,r,q+1]];
@@ -381,7 +407,7 @@ function placeInitial(){if(selected===null)return;if(state.seeds.some(s=>s.id===
 function startSpreadRound(){
   selected=null;actionMode='';
   if(fullCoverage()){endGame('Spread','全部 24 个区域都已感染或有隐藏种子');return}
-  runCalendarEvent();prepareEventSeeds();state.spreadLeft=1;
+  runCalendarEvent();if(!state.infected.length&&!state.seeds.length){endGame('Resistance','天气清除了全部种子与感染');return}prepareEventSeeds();state.spreadLeft=1;
   state.autoSources=infectedSources();state.autoIndex=0;state.autoUsed=[];state.autoCount=0;state.autoExtraCount=0;state.autoExtraUsed=[];
   if(eligibleEventSources().length)beginEventSpread();else beginAutoSpread();
 }
@@ -460,7 +486,7 @@ function aiPlaceInitialSeeds(){
   selected=pickBest(choices,id=>neighbors(id).length);
   placeInitial();
 }
-function aiEventSpread(){if(state.phase!=='eventSpread'||!state.ai?.spread)return;const sources=eligibleEventSources();if(!sources.length){advanceEventSpread();return}selected=pickBest(sources,id=>spreadNeighbors(id).filter(n=>!occupied(n)).length);const target=pickBest(currentEventChoices(),id=>spreadNeighbors(id).filter(n=>!occupied(n)).length);if(target!==null)chooseEventSpread(target);else advanceEventSpread()}
+function aiEventSpread(){if(state.phase!=='eventSpread'||!state.ai?.spread)return;const sources=eligibleEventSources();if(!sources.length){advanceEventSpread();return}selected=pickBest(sources,id=>eventFrontierChoices(id).length);const target=pickBest(currentEventChoices(),id=>spreadNeighbors(id).filter(n=>!occupied(n)).length);if(target!==null)chooseEventSpread(target);else advanceEventSpread()}
 function aiAutoSpread(){
   if(state.phase!=='autoSpread'||!state.ai?.spread)return;
   const sources=availableAutoSources();
@@ -490,10 +516,11 @@ function aiResistance(){
   const clues=fresh.filter(id=>hot.has(id));
   const target=pickBest(clues.length?clues:fresh,id=>localNeighbors(id).filter(n=>!infected.includes(n)).length);
   if(target===null)break;
-  spend(searchCost(target));
+  const searchWasFree=searchFree(target);const cost=searchCost(target);if(searchWasFree){state.eventUsedResistance??=[];state.eventUsedResistance.push(target)}spend(cost);
   const si=state.seeds.findIndex(s=>s.id===target);
+  if(!state.aiEmpty.includes(target))state.aiEmpty.push(target);
   if(si>=0){state.seeds.splice(si,1);log(owners[m]+' AI 搜索 '+cellLabel(target)+'，找到隐藏种子。')}
-  else{state.aiEmpty.push(target);log(owners[m]+' AI 搜索 '+cellLabel(target)+'，未找到种子。')}
+  else log(owners[m]+' AI 搜索 '+cellLabel(target)+'，未找到种子。')
  }
  persist();finishMap();
 }

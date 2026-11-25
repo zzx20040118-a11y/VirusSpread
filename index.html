@@ -90,6 +90,22 @@ body{background-color:#eee8d9;background-image:repeating-linear-gradient(0deg,tr
 .event-bank{background:#e8edda;border:1px solid #b3c394;border-radius:8px;padding:11px;margin-bottom:14px;color:#354a2e}.event-bank strong{font-family:Georgia,serif;display:block}.event-bank small{display:block;margin-top:5px;line-height:1.45}
 
 .weather-count{position:absolute;right:3px;top:3px;background:#fce4b3;color:#5d372a;border:1px solid #805140;border-radius:8px;padding:1px 4px;font-weight:bold;font-size:10px;z-index:5;pointer-events:none}.triangle-cell.weather-source{outline:3px solid #d48638;outline-offset:1px}
+/* Terrain is the tile face. Infection is a red token on the numbered row. */
+.triangle-cell.terrain-plains{--terrain-face:#a7bf8a;--terrain-ink:#304232}
+.triangle-cell.terrain-desert{--terrain-face:#e9c789;--terrain-ink:#70482b}
+.triangle-cell.terrain-snow{--terrain-face:#c6dce0;--terrain-ink:#31535d}
+.triangle-cell.infected,.triangle-cell.seed{background:var(--terrain-face)!important;color:var(--terrain-ink)}
+.triangle-cell .spore{background:#961f29;width:14px;height:14px}
+.triangle-cell .grain{background:#845100}
+.triangle-cell .terrain-icon{left:50%;top:auto;transform:translateX(-50%);font-size:13px;filter:none}
+.tri-down .terrain-icon{top:22px}
+.tri-up .terrain-icon{bottom:22px}
+.tri-down .mark{top:5px}
+.tri-up .mark{bottom:5px}
+.triangle-cell.infected .mark{text-shadow:none}
+.triangle-cell .weather-count{right:2px;font-size:9px;line-height:10px;padding:0 2px}
+.tri-up .weather-count{top:auto;bottom:0}
+.tri-down .weather-count{top:0}
 </style>
 </head>
 <body>

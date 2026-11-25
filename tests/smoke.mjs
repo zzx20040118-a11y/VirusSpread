@@ -38,12 +38,33 @@ Function('assert', engine + `
     updateRemainingWeather();
     assert.deepEqual(state.calendar.events,{2:'rain',3:'heatwave',6:calendar.events[6],9:calendar.events[9]});
   }
-  state.round=9;
-  state.calendar=CALENDARS[1]; state.maps[0].terrain.fill('plains');
-  state.infected=[0]; state.seeds=[{id:1,planted:9}];
-  startSpreadRound();
+  makeGame();
+  state.round=3; state.calendar=CALENDARS[0];
+  // Construct a fork: a route from 0 through 1 must not jump back
+  // to 0's other neighbor. Compare with the public rule snapshot.
+  state.maps[0].coords=[[0,0,0],[1,0,0],[1,0,-1],[0,1,0],[1,1,0],[0,2,0],[1,2,0],[0,3,0]];
+  state.maps.forEach(map=>map.terrain.fill('snow'));state.maps[0].terrain[0]='plains';
+  state.infected=[0];state.seeds=[]; startSpreadRound();
+  chooseEventSpread(0); chooseEventSpread(1);
+  assert.ok(!eventFrontierChoices(0).includes(2));
+  chooseEventSpread(3); chooseEventSpread(4);
+  assert.deepEqual(state.seeds.map(s=>s.id),[1,3,4]);assert.deepEqual(state.infected,[0]);
+  assert.equal(statusOf(1,'resistance'),'normal');assert.equal(state.phase,'autoSpread');
+  for(const [weather,lastRound] of [['rain',3],['sinkhole',4]]) {
+    state.round=3;state.calendar={events:{3:weather}};state.links=[[0,8]];
+    state.infected=[];state.seeds=[{id:0,planted:3}]; runCalendarEvent();
+    assert.deepEqual(state.eventOwnership.spread,[]);assert.deepEqual(state.eventOwnership.resistance,[0]);
+    assert.ok(state.sowingBan.includes(8));assert.deepEqual(spreadNeighbors(1),[]);
+    assert.ok(!spreadNeighbors(3).includes(1));assert.equal(state.seeds.length,1);
+    if(lastRound===4){state.round=4;runCalendarEvent();assert.deepEqual(spreadNeighbors(1),[])}
+    state.round=lastRound+1;runCalendarEvent();assert.ok(spreadNeighbors(3).includes(1));
+  }
+  makeGame();state.round=3;state.calendar=CALENDARS[2];state.maps.forEach(map=>map.terrain.fill('plains'));
+  state.maps[0].terrain[0]='snow'; state.infected=[0];runCalendarEvent();
+  assert.deepEqual(new Set(state.seeds.map(s=>s.id)),new Set(neighbors(0)));
+  makeGame();state.round=9;state.calendar=CALENDARS[0];state.maps[0].terrain.fill('snow');
+  state.infected=[0];state.seeds=[{id:1,planted:9}];startSpreadRound();
   assert.equal(state.winner,'Resistance');
-  assert.equal(state.seeds.length,0);
   state.phase='resistance'; state.round=10; state.activeMap=0;
   state.infected=[0]; state.ap=[1,0,0]; state.sharedPool=1; selected=0;
   clearInfection();
@@ -70,7 +91,7 @@ Function('assert', engine + `
   assert.deepEqual([...weatherReliefIslands()].sort(),[0,1]);
   state.round=6;state.calendar=CALENDARS[0];
   state.maps.forEach(map=>map.terrain.fill('snow'));
-  state.maps[0].terrain[0]='plains';state.infected=[0];
+  state.maps[0].terrain[0]='desert';state.infected=[0];
   startSpreadRound();assert.equal(state.winner,'Spread');
   assert.equal(state.infected.length,24);
   for (const layout of layoutPool) {

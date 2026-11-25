@@ -110,13 +110,14 @@ body{background-color:#eee8d9;background-image:repeating-linear-gradient(0deg,tr
 
 .event-duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0}.event-side{padding:9px;border-radius:7px;border:1px solid #d4c7ae;background:#f7f1e5}.event-side.pos{border-left:4px solid #6e9273}.event-side.neg{border-left:4px solid #b47762}.event-side strong{display:block;font-size:13px}.event-side small{line-height:1.45}.triangle-cell.search-blocked{box-shadow:inset 0 0 0 3px #bc9456!important}.triangle-cell.clear-blocked{box-shadow:inset 0 0 0 3px #b36767!important}.triangle-cell.source-blocked{outline:2px solid #a65767}.triangle-cell.sowing-ban{box-shadow:inset 0 0 0 3px #735a4a!important}@media(max-width:600px){.event-duo{grid-template-columns:1fr}}
 .calendar-details{display:grid;gap:7px;margin-top:10px}.calendar-detail{padding:7px 8px;background:#f5efe4;border-radius:6px;text-align:left}.calendar-detail strong{display:block;font-size:12px}.calendar-detail small{display:block;line-height:1.45;margin-top:2px}.calendar-signs{display:flex;flex-direction:column;font-size:10px;line-height:1.05;font-weight:800}.calendar-signs span{white-space:nowrap}
+.event-tuner-dialog{width:min(620px,94vw);max-height:84vh;overflow:auto;border:1px solid #b8a58c;border-radius:13px;padding:22px;background:#f8f3e9;color:#30291f}.event-tuner-dialog::backdrop{background:#241d19aa}.event-tuner-group{margin-top:14px;border-top:1px solid #d7c9b5;padding-top:9px}.event-tuner-group h3{margin:3px 0 9px}.event-tuner-cell{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #e4d8ca}.event-tuner-cell span:first-child{min-width:0}.event-tuner-cell b{display:block;font-size:13px}.event-tuner-cell small{font-size:11px;opacity:.8}.event-tuner-control{display:flex;gap:6px;align-items:center}.event-tuner-control input{width:64px;padding:5px 6px;text-align:center;color:#30291f;background:#fffdf9;border:1px solid #b9a78e;border-radius:6px;font-size:14px}.event-tuner-control small{min-width:40px}.event-tuner-dialog .actionrow{margin-top:15px;flex-wrap:wrap}#eventTunerStatus{font-size:12px;color:#655443}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
     <div class="brand"><div class="brandmark">◉</div><div><h1>Spread / Resistance</h1><small>15 种不同形状的三角地图 · 自选开局 · 自主扩散</small></div></div>
-    <div class="top-actions"><button class="secondary small" id="guideBtn">玩法教程</button><button class="secondary small" id="voiceBtn" aria-expanded="false" aria-controls="voicePanel">语音房间</button><button class="secondary small" id="newGameBtn">新开一局</button></div>
+    <div class="top-actions"><button class="secondary small" id="eventTunerBtn">事件参数</button><button class="secondary small" id="guideBtn">玩法教程</button><button class="secondary small" id="voiceBtn" aria-expanded="false" aria-controls="voicePanel">语音房间</button><button class="secondary small" id="newGameBtn">新开一局</button></div>
   </header>
   <section id="voicePanel" class="tools-panel" hidden>
     <h2>队伍语音</h2><p>创建房间后把邀请链接发给队友。首次进入的玩家需要登录 Jitsi 主持通话。棋盘在当前设备上操作。</p>
@@ -125,6 +126,7 @@ body{background-color:#eee8d9;background-image:repeating-linear-gradient(0deg,tr
     <div class="actionrow"><button id="voiceCopy">复制邀请</button><a id="voiceOpen" target="_blank" rel="noopener noreferrer">在独立窗口加入</a><button class="secondary" id="voiceLeave">关闭本页通话</button></div>
     <p id="voiceStatus" role="status"></p><div id="voiceMount"></div></div>
   </section>
+  <dialog id="eventTuner" class="event-tuner-dialog"><form method="dialog"><button class="secondary small" style="float:right">关闭</button></form><h2>天气事件 · 数值测试</h2><p>仅调整 12 项事件数值，不修改地图、回合或胜负规则。数值在下一局应用，刷新页面也会保留。</p><div id="eventTunerFields"></div><div class="actionrow"><button id="eventTunerReset" class="secondary" type="button">恢复默认数值</button><button id="eventTunerCopy" type="button">复制参数 JSON</button></div><p id="eventTunerStatus" role="status">已保存</p></dialog>
   <dialog id="guide"><form method="dialog"><button style="float:right" class="secondary small">关闭</button></form>
     <small id="guideStep"></small><h2 id="guideTitle"></h2><p id="guideText"></p>
     <div class="actionrow"><button id="guideBack" class="secondary">上一步</button><button id="guideNext">下一步</button></div>
@@ -157,7 +159,7 @@ const TERRAIN_EFFECTS={
    positive:{name:'藤蔓蔓延',description:'每个平原公开感染格沿不走回头路的路径播下最多 5 颗种子',kind:'path',quota:5},
    negative:{name:'土壤封锁',description:'每个平原公开感染格及其邻格本轮禁止播种',kind:'sowlock',rounds:1}},
   resistance:{
-   positive:{name:'净土行动',description:'每个非公开感染平原格清除自己或邻格的一处公开感染',kind:'cleanOne'},
+   positive:{name:'净土行动',description:'每个非公开感染平原格清除自己或邻格的一处公开感染',kind:'cleanOne',quota:1},
    negative:{name:'浓雾遮蔽',description:'每个非公开感染平原格及其邻格连续两轮不能搜索种子',kind:'searchlock',rounds:2}}
  },
  desert:{
@@ -177,6 +179,62 @@ const TERRAIN_EFFECTS={
    negative:{name:'救援受阻',description:'每个非公开感染雪地格周围公开感染连续两轮不能清除',kind:'clearlock',rounds:2}}
  }
 };
+// Public, editable event-only numeric settings. Existing games keep their own snapshot.
+const EVENT_TUNING_KEY='spreadResistanceEventTuningV1';
+const EVENT_TERRAINS=['plains','desert','snow'];
+const EVENT_SIDES=['spread','resistance'];
+const EVENT_SIGNS=['positive','negative'];
+function defaultEventTuning(){
+ const values={};
+ for(const terrain of EVENT_TERRAINS)for(const side of EVENT_SIDES)for(const sign of EVENT_SIGNS){
+  const e=TERRAIN_EFFECTS[terrain][side][sign],field=Object.hasOwn(e,'quota')?'quota':'rounds';
+  values[terrain+'.'+side+'.'+sign]={field,value:e[field]};
+ }
+ return values;
+}
+const EVENT_TUNING_DEFAULTS=defaultEventTuning();
+function eventTuningFromStorage(){
+ let raw={};
+ try{raw=JSON.parse(localStorage.getItem(EVENT_TUNING_KEY)||'{}')||{}}catch(e){}
+ const result={};
+ for(const [key,spec] of Object.entries(EVENT_TUNING_DEFAULTS)){
+  const n=Number(raw[key]);
+  result[key]=raw[key]!==undefined&&Number.isInteger(n)&&n>=0&&n<=24?n:spec.value;
+ }
+ return result;
+}
+let eventTuningDraft=eventTuningFromStorage();
+function eventEffectFor(terrain,side,sign){
+ const original=TERRAIN_EFFECTS[terrain][side][sign];
+ const key=terrain+'.'+side+'.'+sign;
+ const field=EVENT_TUNING_DEFAULTS[key].field;
+ // Values for the current game are fixed at its start, even if the tester edits a draft.
+ const custom=state?.eventParameters?.[key];
+ return {...original,[field]:Number.isInteger(custom)?custom:EVENT_TUNING_DEFAULTS[key].value};
+}
+function describeEventEffect(e){
+ if(e.kind==='cleanOne')return '每个对应的 Resistance 格，清除自身或相邻最多 '+e.quota+' 处公开感染';
+ let text=e.description;
+ if(Number.isInteger(e.quota))text=text.replace(/最多\s*\d+\s*颗/,'最多 '+e.quota+' 颗');
+ if(Number.isInteger(e.rounds))text=text.replace(/连续两轮|连续一轮|本轮|两轮|一轮|\d+\s*轮/,'持续 '+e.rounds+' 轮');
+ return text;
+}
+function eventTunerMarkup(){
+ return EVENT_TERRAINS.map(terrain=>{
+  const cards=EVENT_SIDES.flatMap(side=>EVENT_SIGNS.map(sign=>{
+   const key=terrain+'.'+side+'.'+sign,spec=EVENT_TUNING_DEFAULTS[key],value=eventTuningDraft[key],e=TERRAIN_EFFECTS[terrain][side][sign];
+   const unit=spec.field==='quota'?'颗 / 处':'轮';
+   return '<label class="event-tuner-cell"><span><b>'+ (side==='spread'?'Spread':'Resistance')+' '+(sign==='positive'?'＋':'－')+' · '+e.name+'</b><small>'+ (spec.field==='quota'?'传播或清除次数':'效果持续轮数')+'</small></span>'+
+    '<span class="event-tuner-control"><input type="number" inputmode="numeric" min="0" max="24" step="1" value="'+value+'" aria-label="'+TERRAIN[terrain].name+' '+side+' '+sign+'" onchange="window.setEventValue(\''+key+'\',this.value,this)"><small>'+unit+'</small></span></label>';
+  })).join('');
+  return '<section class="event-tuner-group"><h3>'+TERRAIN[terrain].icon+' '+TERRAIN[terrain].name+'</h3>'+cards+'</section>';
+ }).join('');
+}
+function showEventTuner(){
+ $('#eventTunerFields').innerHTML=eventTunerMarkup();
+ $('#eventTunerStatus').textContent='修改会自动保存，下一局开始生效；本局仍使用开局时的数值。';
+ $('#eventTuner').showModal();
+}
 const CALENDARS=[
  {name:'A · 风暴交替',events:{3:'overgrowth',6:'sandstorm',9:'freeze'}},
  {name:'B · 热浪与暴雨',events:{3:'rain',6:'heatwave',9:'blizzard'}},
@@ -199,7 +257,7 @@ function drawCalendar(base){
 function terrainOf(id){return state.maps[Math.floor(id/CELLS_PER_MAP)].terrain[id%CELLS_PER_MAP]}
 function eventId(){return state.eventId||''}
 function activeEvent(){return EVENTS[eventId()]||null}
-function weatherEffect(side){const e=activeEvent(),sign=state.weatherRoll?.[side];return e&&sign?TERRAIN_EFFECTS[e.terrain][side][sign]:null}
+function weatherEffect(side){const e=activeEvent(),sign=state.weatherRoll?.[side];return e&&sign?eventEffectFor(e.terrain,side,sign):null}
 function terrainMatch(id,t){return terrainOf(id)===t}
 function eventSide(id,side){return (state.eventOwnership?.[side]||[]).includes(id)}
 function activeWeatherLock(kind,id){return (state.weatherLocks?.[kind]?.[id]||0)>=state.round}
@@ -286,8 +344,8 @@ function runCalendarEvent(){
   }else if(effect.kind==='cleanOne'){
    const chosen=new Set();
    for(const id of owners){
-    const target=weatherArea(id).find(tile=>snapshot.has(tile)&&!chosen.has(tile));
-    if(target!==undefined)chosen.add(target);
+    const possible=weatherArea(id).filter(tile=>snapshot.has(tile)&&!chosen.has(tile));
+    for(const tile of possible.slice(0,effect.quota))chosen.add(tile);
    }
    state.weatherCleanseTargets=[...chosen];
   }
@@ -313,8 +371,8 @@ function eventCard(){
  const note=local?'本岛：公开感染 '+own.spread.filter(i=>Math.floor(i/8)===state.activeMap).length+' 格；其他 '+own.resistance.filter(i=>Math.floor(i/8)===state.activeMap).length+' 格':
   '公开感染 '+own.spread.length+' 格；其他 '+own.resistance.length+' 格';
  return '<div class="event-card"><span class="event-symbol">'+TERRAIN[e.terrain].icon+'</span><div><b>第 '+state.round+' 轮 · '+e.name+'</b>'+
-  '<div class="event-duo"><div class="event-side '+(sv?'pos':'neg')+'"><strong>Spread '+(sv?'＋':'－')+' · '+se.name+'</strong><small>'+se.description+'</small></div>'+
-  '<div class="event-side '+(rv?'pos':'neg')+'"><strong>Resistance '+(rv?'＋':'－')+' · '+re.name+'</strong><small>'+re.description+'</small></div></div>'+
+  '<div class="event-duo"><div class="event-side '+(sv?'pos':'neg')+'"><strong>Spread '+(sv?'＋':'－')+' · '+se.name+'</strong><small>'+describeEventEffect(se)+'</small></div>'+
+  '<div class="event-side '+(rv?'pos':'neg')+'"><strong>Resistance '+(rv?'＋':'－')+' · '+re.name+'</strong><small>'+describeEventEffect(re)+'</small></div></div>'+
   '<small>'+note+'。按事件触发时的状态判定，隐藏种子不暴露。</small></div></div>';
 }
 function calendarCard(){
@@ -327,10 +385,10 @@ function calendarCard(){
  const details=Object.entries(c.events).map(([r,key])=>{
   const ev=EVENTS[key],roll=c.rolls?.[r];
   if(!roll)return '<div class="calendar-detail">第'+r+'轮 · '+ev.name+'</div>';
-  const s=TERRAIN_EFFECTS[ev.terrain].spread[roll.spread],res=TERRAIN_EFFECTS[ev.terrain].resistance[roll.resistance];
+  const s=eventEffectFor(ev.terrain,'spread',roll.spread),res=eventEffectFor(ev.terrain,'resistance',roll.resistance);
   return '<div class="calendar-detail"><strong>第'+r+'轮 · '+TERRAIN[ev.terrain].icon+' '+ev.name+'</strong>'+
-   '<small>Spread '+(roll.spread==='positive'?'＋':'－')+' '+s.name+' · '+s.description+'</small>'+
-   '<small>Resistance '+(roll.resistance==='positive'?'＋':'－')+' '+res.name+' · '+res.description+'</small></div>';
+   '<small>Spread '+(roll.spread==='positive'?'＋':'－')+' '+s.name+' · '+describeEventEffect(s)+'</small>'+
+   '<small>Resistance '+(roll.resistance==='positive'?'＋':'－')+' '+res.name+' · '+describeEventEffect(res)+'</small></div>';
  }).join('');
  return '<div class="calendar-block"><strong>☷ 本局日历 · '+c.name+'</strong><small>开局已经确定全部正负效果，本局不会再随机</small><div class="calendar-track">'+days+'</div><div class="calendar-details">'+details+'</div></div>';
 }
@@ -436,7 +494,8 @@ function upgradeCoasts() {
 function makeGame(ai=aiSetup){
   const tiles=shuffled(layoutPool).slice(0,3).map(compactLayout);
   const calendar=drawCalendar(CALENDARS[rand(CALENDARS.length)]);
-  state={calendar,terrainWeatherVersion:3,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},weatherRoll:null,weatherLocks:{},weatherCleanseTargets:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
+  const eventParameters={...eventTuningDraft};
+  state={calendar,eventParameters,terrainWeatherVersion:3,openingElimination:false,eventId:'',eventFreeUsed:0,eventOwnership:{spread:[],resistance:[]},eventUsedResistance:[],eventCharges:{},eventFrontier:{},weatherRoll:null,weatherLocks:{},weatherCleanseTargets:[],coastalVersion:1,round:1,phase:'stitch',nextPhase:'',nextRole:'',ai:{spread:!!ai.spread,resistance:[...ai.resistance]},aiEmpty:[],maps:tiles.map(t=>({name:t.name,coords:t.coords,ports:t.ports,terrain:Array.from({length:CELLS_PER_MAP},()=>['plains','desert','snow'][rand(3)]),color:t.color,coast:t.coast})),positions:[{x:20,y:80},{x:395,y:250},{x:770,y:80}],links:[],stitchPairIndex:0,stitchNotice:'',seeds:[],setupSeedIds:[],autoSources:[],autoIndex:0,autoUsed:[],autoCount:0,autoExtraCount:0,autoExtraUsed:[],nextApBonus:[0,0,0],infected:[],meter:1,ap:[0,0,0],sharedPool:0,activeMap:0,spreadLeft:0,selected:null,mode:'',winner:'',winReason:'',log:['新游戏开始。Spread 先把三个地图的出海口两两连接。']};
   selected=null;actionMode='';persist();render();
 }
 function persist(){try{if(state)localStorage.setItem('spreadResistanceSaveV26',JSON.stringify(state));else localStorage.removeItem('spreadResistanceSaveV26')}catch(e){}}
@@ -741,6 +800,30 @@ document.addEventListener('pointermove',dragMove);
 document.addEventListener('pointerup',dragEnd);
 document.addEventListener('pointercancel',dragEnd);
 new MutationObserver(()=>requestAnimationFrame(drawStitchLines)).observe($('#main'),{childList:true,subtree:true});
+window.setEventValue=(key,raw,input)=>{
+ const spec=EVENT_TUNING_DEFAULTS[key];if(!spec)return;
+ const value=Number(raw);
+ if(!Number.isInteger(value)||value<0||value>24){
+  input.value=eventTuningDraft[key];
+  $('#eventTunerStatus').textContent='请输入 0 到 24 之间的整数。';
+  return;
+ }
+ eventTuningDraft[key]=value;
+ try{localStorage.setItem(EVENT_TUNING_KEY,JSON.stringify(eventTuningDraft))}catch(e){}
+ $('#eventTunerStatus').textContent='已保存 '+key+' = '+value+'；下一局生效。';
+};
+$('#eventTunerBtn').onclick=showEventTuner;
+$('#eventTunerReset').onclick=()=>{
+ eventTuningDraft=Object.fromEntries(Object.entries(EVENT_TUNING_DEFAULTS).map(([key,v])=>[key,v.value]));
+ try{localStorage.setItem(EVENT_TUNING_KEY,JSON.stringify(eventTuningDraft))}catch(e){}
+ $('#eventTunerFields').innerHTML=eventTunerMarkup();
+ $('#eventTunerStatus').textContent='已恢复默认参数，下一局生效。';
+};
+$('#eventTunerCopy').onclick=async()=>{
+ const output=JSON.stringify(eventTuningDraft,null,2);
+ try{await navigator.clipboard.writeText(output);$('#eventTunerStatus').textContent='已复制全部 12 项事件数值。'}
+ catch(e){$('#eventTunerStatus').textContent='浏览器禁止自动复制，可从开发者工具查看本地保存的事件参数。'}
+};
 $('#newGameBtn').onclick=window.newGame;
 const lessons = [
   ['选择席位','1 位 Spread 对抗 3 位 Resistance。每个席位都能交给 AI。你可以先当 Spread，观察种子如何沿着路线扩散。'],
